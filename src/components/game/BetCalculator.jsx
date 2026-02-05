@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Calculator, DollarSign, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useBetSlip } from "./BetSlipContext";
@@ -196,6 +196,9 @@ export default function BetCalculator() {
             <DialogContent className="bg-slate-900 border-slate-800 max-w-xs">
               <DialogHeader>
                 <DialogTitle className="text-white">Enter Bet Amount</DialogTitle>
+                <DialogDescription className="sr-only">
+                  Enter a wager amount using the keypad.
+                </DialogDescription>
               </DialogHeader>
               
               {/* Display */}

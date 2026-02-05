@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useSettings, ALL_SPORTSBOOKS, ALL_PREDICTION_MARKETS, VIEW_MODE_BOOKS, VIEW_MODE_MARKETS } from "./SettingsContext";
@@ -88,6 +88,9 @@ export default function SettingsModal({ open, onOpenChange, initialTab = "books"
       <DialogContent data-tour="settings-content" className="bg-slate-900 border-slate-800 text-white max-w-md max-h-[85vh] flex flex-col z-[105]">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold">Settings</DialogTitle>
+          <DialogDescription className="sr-only">
+            Update your sportsbooks and prediction markets.
+          </DialogDescription>
         </DialogHeader>
         
         {/* Tab Toggle */}
