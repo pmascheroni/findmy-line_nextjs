@@ -22,7 +22,7 @@ export default function MarketSection({ title, marketKey, game, icon }) {
     : getSportsbooks();
 
   // Find best odds for each outcome - only highlight ONE book per row (first with best odds)
-  const findBest = (outcomeName, pointValue = null) => {
+  const findBest = (outcomeName, outcomeDescription, pointValue = null) => {
     let bestOdds = -Infinity;
     let bestBook = null;
     
@@ -33,10 +33,12 @@ export default function MarketSection({ title, marketKey, game, icon }) {
       
       const market = book.markets?.find(m => m.key === marketKey);
       const outcome = market?.outcomes?.find(o => {
+        if (outcomeDescription && o.description !== outcomeDescription) return false;
+        if (o.name !== outcomeName) return false;
         if (pointValue !== null) {
-          return o.name === outcomeName && o.point === pointValue;
+          return o.point === pointValue;
         }
-        return o.name === outcomeName;
+        return true;
       });
       
       if (outcome?.price > bestOdds) {
@@ -55,9 +57,10 @@ export default function MarketSection({ title, marketKey, game, icon }) {
     game.bookmakers?.forEach(book => {
       const market = book.markets?.find(m => m.key === marketKey);
       market?.outcomes?.forEach(o => {
-        const key = o.point !== undefined ? `${o.name}|${o.point}` : o.name;
+        const keyParts = [o.description || "", o.name, o.point !== undefined ? o.point : ""];
+        const key = keyParts.join("|");
         if (!outcomes.has(key)) {
-          outcomes.set(key, { name: o.name, point: o.point });
+          outcomes.set(key, { name: o.name, point: o.point, description: o.description });
         }
       });
     });
@@ -116,15 +119,25 @@ export default function MarketSection({ title, marketKey, game, icon }) {
                 </thead>
                 <tbody>
                   {outcomes.map((outcome, idx) => {
-                    const best = findBest(outcome.name, outcome.point);
+                    const best = findBest(outcome.name, outcome.description, outcome.point);
+                    const displayName = outcome.description || outcome.name;
+                    const secondaryLabel = outcome.description ? outcome.name : null;
+                    const outcomeLabel = outcome.description
+                      ? `${outcome.description} ${outcome.name}`
+                      : outcome.name;
                     
                     return (
                       <tr key={idx} className="border-t border-slate-800/30 hover:bg-slate-800/20">
                         <td className="px-4 py-2 sticky left-0 z-10 bg-slate-900 min-w-[120px]">
                           <div className="flex flex-col">
                             <span className="font-medium text-white text-xs sm:text-sm">
-                              {outcome.name}
+                              {displayName}
                             </span>
+                            {secondaryLabel && (
+                              <span className="text-slate-400 text-xs">
+                                {secondaryLabel}
+                              </span>
+                            )}
                             {outcome.point !== undefined && (
                               <span className="text-slate-400 text-xs">
                                 ({outcome.point > 0 ? `+${outcome.point}` : outcome.point})
@@ -139,10 +152,14 @@ export default function MarketSection({ title, marketKey, game, icon }) {
                           const bookmaker = game.bookmakers?.find(b => b.key === book.key);
                           const market = bookmaker?.markets?.find(m => m.key === marketKey);
                           const bookOutcome = market?.outcomes?.find(o => {
-                            if (outcome.point !== undefined) {
-                              return o.name === outcome.name && o.point === outcome.point;
+                            if (outcome.description && o.description !== outcome.description) {
+                              return false;
                             }
-                            return o.name === outcome.name;
+                            if (o.name !== outcome.name) return false;
+                            if (outcome.point !== undefined) {
+                              return o.point === outcome.point;
+                            }
+                            return true;
                           });
                           
                           // For locked cells, generate demo "best" indicator randomly based on position
@@ -159,7 +176,7 @@ export default function MarketSection({ title, marketKey, game, icon }) {
                           const isSelected = isBetSelected(
                             game.id,
                             marketKey,
-                            outcome.name,
+                            outcomeLabel,
                             book.name,
                             outcome.point
                           );
@@ -171,7 +188,7 @@ export default function MarketSection({ title, marketKey, game, icon }) {
                               gameId: game.id,
                               market: marketKey,
                               marketName: title,
-                              outcome: outcome.name,
+                              outcome: outcomeLabel,
                               point: outcome.point,
                               odds: bookOutcome.price,
                               sportsbook: book.name,

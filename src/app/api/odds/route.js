@@ -10,6 +10,38 @@ const errorLogCache = new Map();
 const REQUEST_TTL_MS = 60 * 1000;
 const SPORT_TTL_MS = 2 * 60 * 1000;
 const LOG_TTL_MS = 60 * 1000;
+const MAX_MARKETS = 12;
+
+const DEFAULT_MARKETS = (process.env.ODDS_API_MARKETS || "h2h,spreads,totals")
+  .split(",")
+  .map((market) => market.trim())
+  .filter(Boolean);
+
+const ALLOWED_MARKETS = new Set([
+  ...DEFAULT_MARKETS,
+  "alternate_spreads",
+  "alternate_totals",
+  "team_totals_home",
+  "team_totals_away",
+  "player_points",
+  "player_rebounds",
+  "player_assists",
+  "player_threes",
+  "player_points_rebounds_assists",
+  "player_pass_yds",
+  "player_pass_tds",
+  "player_rush_yds",
+  "player_receive_yds",
+  "player_receptions",
+  "player_anytime_td",
+  "batter_home_runs",
+  "batter_hits",
+  "batter_rbis",
+  "pitcher_strikeouts",
+  "player_goals",
+  "player_shots_on_goal",
+  "player_points",
+]);
 
 function getUtcDayRange(dateValue, tzOffsetMinutes = null) {
   if (!dateValue) return null;
@@ -52,7 +84,16 @@ export async function GET(request) {
 
   const baseUrl = (process.env.ODDS_API_BASE_URL || "https://api.the-odds-api.com/v4").trim();
   const regions = process.env.ODDS_API_REGIONS || "us";
-  const markets = process.env.ODDS_API_MARKETS || "h2h,spreads,totals";
+  const marketsParam = searchParams.get("markets");
+  const requestedMarkets = marketsParam
+    ? marketsParam
+        .split(",")
+        .map((market) => market.trim())
+        .filter((market) => market && ALLOWED_MARKETS.has(market))
+        .slice(0, MAX_MARKETS)
+    : [];
+  const marketsList = requestedMarkets.length > 0 ? requestedMarkets : DEFAULT_MARKETS;
+  const markets = marketsList.join(",");
   const oddsFormat = process.env.ODDS_API_ODDS_FORMAT || "american";
   const dateFormat = process.env.ODDS_API_DATE_FORMAT || "iso";
   const range = getUtcDayRange(dateParam, tzOffset);

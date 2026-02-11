@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { createPageUrl } from "@/utils";
@@ -18,9 +18,56 @@ import { useTeamData } from "@/components/game/useTeamData";
 import TeamLogo from "@/components/game/TeamLogo";
 import { useSubscription } from "@/components/subscription/SubscriptionContext";
 import UpgradeBanner from "@/components/subscription/UpgradeBanner";
-import { useSettings, ALL_PREDICTION_MARKETS } from "@/components/settings/SettingsContext";
+import { useSettings } from "@/components/settings/SettingsContext";
 import OnboardingTour from "@/components/onboarding/OnboardingTour";
 import { useOnboarding } from "@/components/onboarding/useOnboarding";
+
+const PROP_MARKETS_BY_SPORT = {
+  americanfootball_nfl: [
+    { key: "player_pass_yds", title: "Passing Yards", icon: "🏈" },
+    { key: "player_pass_tds", title: "Passing TDs", icon: "🎯" },
+    { key: "player_rush_yds", title: "Rushing Yards", icon: "💨" },
+    { key: "player_receive_yds", title: "Receiving Yards", icon: "🙌" },
+    { key: "player_receptions", title: "Receptions", icon: "👐" },
+    { key: "player_anytime_td", title: "Anytime TD", icon: "🔥" },
+  ],
+  basketball_nba: [
+    { key: "player_points", title: "Player Points", icon: "🏀" },
+    { key: "player_rebounds", title: "Player Rebounds", icon: "💪" },
+    { key: "player_assists", title: "Player Assists", icon: "🤝" },
+    { key: "player_threes", title: "3PT Made", icon: "🎯" },
+    { key: "player_points_rebounds_assists", title: "Player PRA", icon: "⭐" },
+  ],
+  baseball_mlb: [
+    { key: "batter_home_runs", title: "Home Runs", icon: "⚾" },
+    { key: "batter_hits", title: "Hits", icon: "🧤" },
+    { key: "batter_rbis", title: "RBIs", icon: "🏆" },
+    { key: "pitcher_strikeouts", title: "Pitcher Strikeouts", icon: "🎯" },
+  ],
+  icehockey_nhl: [
+    { key: "player_goals", title: "Goals", icon: "🥅" },
+    { key: "player_assists", title: "Assists", icon: "🤝" },
+    { key: "player_points", title: "Points", icon: "⭐" },
+    { key: "player_shots_on_goal", title: "Shots on Goal", icon: "🎯" },
+  ],
+};
+
+const mergeBookmakers = (baseBookmakers = [], propBookmakers = []) => {
+  const merged = [...baseBookmakers];
+  propBookmakers.forEach((propBook) => {
+    const existing = merged.find((book) => book.key === propBook.key);
+    if (existing) {
+      const existingMarkets = new Set(existing.markets?.map((market) => market.key));
+      const newMarkets = (propBook.markets || []).filter((market) => !existingMarkets.has(market.key));
+      if (newMarkets.length > 0) {
+        existing.markets = [...(existing.markets || []), ...newMarkets];
+      }
+    } else {
+      merged.push(propBook);
+    }
+  });
+  return merged;
+};
 
 export default function GameDetail() {
   const params = useParams();
@@ -36,10 +83,14 @@ export default function GameDetail() {
   const [generatedOdds, setGeneratedOdds] = useState(null);
   const [teamRecords, setTeamRecords] = useState({});
   const [liveScore, setLiveScore] = useState(null);
+  const [propsLoading, setPropsLoading] = useState(false);
+  const [propsError, setPropsError] = useState(null);
+  const propsLoadedRef = useRef(false);
   const { getTeam, teams } = useTeamData();
   const { isPaid } = useSubscription();
-  const { isMarketsMode } = useSettings();
+  const { isMarketsMode, selectedSportsbooks } = useSettings();
   const { completeTour, neverShowTour } = useOnboarding();
+  const sportsbooksKey = selectedSportsbooks.join(",");
   
   // Check tour state ONCE on mount, not on every render
   const [showTour, setShowTour] = useState(() => {
@@ -236,15 +287,92 @@ export default function GameDetail() {
           })) || []
         };
         setGame(gameWithAmericanOdds);
+        return gameWithAmericanOdds;
       } else {
         const gameData = generateGameDetails(null);
         setGame(gameData);
+        return gameData;
       }
     } catch (err) {
       console.error("Error fetching game:", err);
       setError("Failed to load game details");
+      return null;
     } finally {
       setLoading(false);
+    }
+  };
+
+  const matchGame = (games, baseGame) => {
+    if (!baseGame || !Array.isArray(games)) return null;
+    const direct = games.find((item) => item.id === baseGame.id);
+    if (direct) return direct;
+    const normalize = (name) =>
+      String(name || "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "");
+    const baseTeams = [normalize(baseGame.home_team), normalize(baseGame.away_team)].sort().join("|");
+    const baseTime = new Date(baseGame.commence_time || 0).getTime();
+    return games.find((item) => {
+      const teams = [normalize(item.home_team), normalize(item.away_team)].sort().join("|");
+      if (teams !== baseTeams) return false;
+      const time = new Date(item.commence_time || 0).getTime();
+      return Math.abs(time - baseTime) < 12 * 60 * 60 * 1000;
+    });
+  };
+
+  const fetchPropMarkets = async ({ force = false, targetGame } = {}) => {
+    const baseGame = targetGame || game;
+    const propMarkets = PROP_MARKETS_BY_SPORT[sportKey] || [];
+    if (!baseGame || !sportKey || propMarkets.length === 0) return;
+    if (isMarketsMode) return;
+    if (!force && propsLoadedRef.current) return;
+
+    setPropsLoading(true);
+    setPropsError(null);
+    try {
+      const params = new URLSearchParams();
+      params.set("sports", sportKey);
+      params.set("date", baseGame.commence_time || new Date().toISOString());
+      params.set("markets", propMarkets.map((market) => market.key).join(","));
+      params.set("marketsMode", "0");
+      params.set("sportsbooks", selectedSportsbooks.join(","));
+      params.set("predictionMarkets", "");
+      params.set("tzOffset", String(new Date().getTimezoneOffset()));
+
+      const res = await fetch(`/api/odds?${params.toString()}`, { cache: "no-store" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || "Failed to load props");
+      }
+
+      const matched = matchGame(data?.games || [], baseGame);
+      if (!matched || !matched.bookmakers?.length) {
+        setPropsError("Props not available for this game.");
+        propsLoadedRef.current = true;
+        return;
+      }
+
+      setGame((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          bookmakers: mergeBookmakers(prev.bookmakers || [], matched.bookmakers || []),
+        };
+      });
+      propsLoadedRef.current = true;
+    } catch (err) {
+      setPropsError(err?.message || "Failed to load props");
+    } finally {
+      setPropsLoading(false);
+    }
+  };
+
+  const handleReload = async () => {
+    propsLoadedRef.current = false;
+    setPropsError(null);
+    const refreshed = await fetchGameDetails();
+    if (refreshed) {
+      await fetchPropMarkets({ force: true, targetGame: refreshed });
     }
   };
 
@@ -267,6 +395,12 @@ export default function GameDetail() {
       fetchGameDetails();
     }
   }, [gameId, sportKey, isMarketsMode, initialGame]);
+
+  useEffect(() => {
+    if (!game || !sportKey) return;
+    if (isMarketsMode) return;
+    fetchPropMarkets({ targetGame: game });
+  }, [game?.id, game?.commence_time, game?.home_team, game?.away_team, sportKey, isMarketsMode, sportsbooksKey]);
 
   // Fetch live scores AND team records from ESPN
   useEffect(() => {
@@ -460,12 +594,23 @@ export default function GameDetail() {
         )}
 
         {/* Back Button */}
-      <Link href={createPageUrl("Home")}>
-        <Button variant="ghost" className="text-slate-400 hover:text-white hover:bg-slate-800">
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Games
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Link href={createPageUrl("Home")}>
+          <Button variant="ghost" className="text-slate-400 hover:text-white hover:bg-slate-800">
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Games
+          </Button>
+        </Link>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleReload}
+          className="bg-slate-900/50 border-slate-800 hover:bg-slate-800 text-white"
+        >
+          <RefreshCw className={`w-4 h-4 mr-2 ${loading || propsLoading ? "animate-spin" : ""}`} />
+          Reload
         </Button>
-      </Link>
+      </div>
 
       {/* Game Header */}
       <motion.div
@@ -725,6 +870,44 @@ export default function GameDetail() {
               game={game}
               icon="✈️"
             />
+            {!isMarketsMode && (PROP_MARKETS_BY_SPORT[sportKey] || []).length > 0 && (
+              <div className="pt-2 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-lg font-semibold text-white">Player Props</h3>
+                    <p className="text-sm text-slate-500">
+                      Live props pulled from the odds providers for this matchup.
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fetchPropMarkets({ force: true })}
+                    className="bg-slate-800/50 border-slate-700 hover:bg-slate-800 text-white"
+                  >
+                    <RefreshCw className={`w-4 h-4 mr-2 ${propsLoading ? "animate-spin" : ""}`} />
+                    Refresh Props
+                  </Button>
+                </div>
+                {propsError && (
+                  <div className="text-sm text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
+                    {propsError}
+                  </div>
+                )}
+                {propsLoading && (
+                  <div className="text-sm text-slate-400">Loading prop markets…</div>
+                )}
+                {(PROP_MARKETS_BY_SPORT[sportKey] || []).map((market) => (
+                  <MarketSection
+                    key={market.key}
+                    title={market.title}
+                    marketKey={market.key}
+                    game={game}
+                    icon={market.icon}
+                  />
+                ))}
+              </div>
+            )}
           </motion.div>
         </TabsContent>
 
