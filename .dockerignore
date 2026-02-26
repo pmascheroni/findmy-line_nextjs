@@ -1,0 +1,26 @@
+# Dependency directories
+node_modules
+/scripts
+
+# Build outputs
+.next
+out
+build
+
+# Ignore ONLY the secret Firebase JSON (use the specific name)
+findmy-line-vercel-firebase-adminsdk-*.json
+
+# Allow these critical config files
+!package.json
+!package-lock.json
+!jsconfig.json
+!tsconfig.json
+
+# Secrets
+.env
+.env.local
+
+# Version control & OS
+.git
+.gitignore
+.DS_Store

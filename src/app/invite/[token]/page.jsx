@@ -68,7 +68,7 @@ export default function Invite() {
       const data = await response.json();
 
       if (response.ok && data.ok) {
-        setExpiresAt(data.subscription_expires_at || null);
+        setExpiresAt(data.subscriptionExpiresAt || data.subscription_expires_at || null);
         if (data.already_redeemed) {
           setStatus("alreadyRedeemed");
         } else {

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebaseClient";
 import { useAuth } from "@/lib/AuthContext";
+import { useSubscription } from "@/components/subscription/SubscriptionContext";
 
 const ONBOARDING_KEY = "findmyline_onboarding_completed";
 const SHOW_GAME_TOUR_KEY = "findmyline_show_game_tour";
@@ -18,16 +19,17 @@ export function useOnboarding() {
   });
   const [userHideTour, setUserHideTour] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const { user, userDoc, loading: authLoading } = useAuth();
+  const { user } = useAuth();
+  const { userDoc, loading: subscriptionLoading } = useSubscription();
 
   // Check if user has permanently hidden the tour
   useEffect(() => {
-    if (authLoading) return;
+    if (subscriptionLoading) return;
     if (userDoc?.hideOnboardingTour) {
       setUserHideTour(true);
     }
     setIsLoading(false);
-  }, [authLoading, userDoc]);
+  }, [subscriptionLoading, userDoc]);
 
   const hasCompletedTour = (page) => {
     return completedTours[page] === true;
@@ -51,7 +53,7 @@ export function useOnboarding() {
     // Also save to user record if logged in
     if (user && db) {
       try {
-        await updateDoc(doc(db, "users", user.uid), { hideOnboardingTour: true });
+        await updateDoc(doc(db, "Subscriptions", user.uid), { hideOnboardingTour: true });
       } catch (err) {
         console.error("Failed to save tour preference:", err);
       }
@@ -70,7 +72,7 @@ export function useOnboarding() {
     // Also reset user record if logged in
     if (user && db) {
       try {
-        await updateDoc(doc(db, "users", user.uid), { hideOnboardingTour: false });
+        await updateDoc(doc(db, "Subscriptions", user.uid), { hideOnboardingTour: false });
       } catch (err) {
         // Ignore error
       }

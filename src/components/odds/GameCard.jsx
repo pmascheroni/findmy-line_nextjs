@@ -47,11 +47,17 @@ export default function GameCard({ game, index }) {
   const userLocation = useUserLocation();
   const { isPaid } = useSubscription();
   const { selectedSportsbooks, isMarketsMode, selectedPredictionMarkets } = useSettings();
+  const [hasHydrated, setHasHydrated] = useState(false);
   const gameTime = new Date(game.commence_time);
   const now = new Date();
   // Game is potentially live if it started within the last 6 hours
   const isPotentiallyLive = now > gameTime && (now - gameTime) < 6 * 60 * 60 * 1000 && !game.completed;
   const timezone = userLocation?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const timeLabel = hasHydrated ? formatTimeInTimezone(gameTime, timezone) : "—";
+
+  useEffect(() => {
+    setHasHydrated(true);
+  }, []);
   
   // Debug: log games that should be live
   // console.log(`${game.away_team} @ ${game.home_team}: now=${now.toISOString()}, gameTime=${gameTime.toISOString()}, isPotentiallyLive=${isPotentiallyLive}`);
@@ -373,7 +379,7 @@ export default function GameCard({ game, index }) {
                       <div className="flex items-center gap-3 text-sm">
                         <span className="flex items-center gap-1 sm:gap-1.5 text-slate-400 text-xs sm:text-sm">
                           <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                          {formatTimeInTimezone(gameTime, timezone)}
+                          {timeLabel}
                         </span>
                       </div>
                     </div>

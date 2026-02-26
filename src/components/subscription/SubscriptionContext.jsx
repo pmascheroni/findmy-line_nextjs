@@ -14,17 +14,11 @@ async function ensureSubscriptionDoc(user) {
       email: user.email || null,
       createdAt: serverTimestamp(),
       subscriptionStatus: "inactive",
-      subscription_status: "inactive",
       stripeCustomerId: null,
-      stripe_customer_id: null,
       stripeSubscriptionId: null,
-      stripe_subscription_id: null,
       subscriptionPeriodEnd: null,
-      subscription_expires_at: null,
       subscriptionPlan: "free",
-      subscription_plan: "free",
       subscriptionCancelAtPeriodEnd: false,
-      subscription_cancel_at_period_end: false,
     });
   }
   return ref;
@@ -42,22 +36,18 @@ const normalizeSubscription = (data) => {
     (typeof rawPeriodEnd === "string" ? new Date(rawPeriodEnd) : rawPeriodEnd instanceof Date ? rawPeriodEnd : null);
   const cancelAtPeriodEnd =
     data.subscriptionCancelAtPeriodEnd ?? data.subscription_cancel_at_period_end ?? false;
+  const inviteTokenId = data.inviteTokenId ?? data.invite_token_id ?? null;
 
   return {
     ...data,
     subscriptionStatus: status,
-    subscription_status: data.subscription_status ?? status,
     subscriptionPlan: plan,
-    subscription_plan: data.subscription_plan ?? plan,
     stripeCustomerId,
-    stripe_customer_id: data.stripe_customer_id ?? stripeCustomerId,
     stripeSubscriptionId,
-    stripe_subscription_id: data.stripe_subscription_id ?? stripeSubscriptionId,
     subscriptionPeriodEnd: rawPeriodEnd,
-    subscription_expires_at: data.subscription_expires_at ?? rawPeriodEnd,
     subscriptionPeriodEndDate: periodEndDate,
     subscriptionCancelAtPeriodEnd: cancelAtPeriodEnd,
-    subscription_cancel_at_period_end: data.subscription_cancel_at_period_end ?? cancelAtPeriodEnd,
+    inviteTokenId,
   };
 };
 

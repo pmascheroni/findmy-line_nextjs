@@ -101,69 +101,59 @@ export const VIEW_MODE_MARKETS = "markets";
 const SettingsContext = createContext();
 
 export function SettingsProvider({ children }) {
-  const [selectedSportsbooks, setSelectedSportsbooks] = useState(() => {
-    const saved =
-      typeof window !== "undefined" &&
-      window.localStorage &&
-      typeof window.localStorage.getItem === "function"
-        ? window.localStorage.getItem("selectedSportsbooks")
-        : null;
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length >= 1 && parsed.length <= 5) {
-          return parsed;
-        }
-      } catch (e) {}
-    }
-    return DEFAULT_SELECTED;
-  });
-
-  const [selectedPredictionMarkets, setSelectedPredictionMarkets] = useState(() => {
-    const saved =
-      typeof window !== "undefined" &&
-      window.localStorage &&
-      typeof window.localStorage.getItem === "function"
-        ? window.localStorage.getItem("selectedPredictionMarkets")
-        : null;
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length >= 1 && parsed.length <= 5) {
-          return parsed;
-        }
-      } catch (e) {}
-    }
-    return DEFAULT_PREDICTION_MARKETS;
-  });
-
-  const [viewMode, setViewMode] = useState(() => {
-    const saved =
-      typeof window !== "undefined" &&
-      window.localStorage &&
-      typeof window.localStorage.getItem === "function"
-        ? window.localStorage.getItem("viewMode")
-        : null;
-    return saved === VIEW_MODE_MARKETS ? VIEW_MODE_MARKETS : VIEW_MODE_BOOKS;
-  });
+  const [selectedSportsbooks, setSelectedSportsbooks] = useState(DEFAULT_SELECTED);
+  const [selectedPredictionMarkets, setSelectedPredictionMarkets] = useState(DEFAULT_PREDICTION_MARKETS);
+  const [viewMode, setViewMode] = useState(VIEW_MODE_BOOKS);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   useEffect(() => {
+    if (typeof window === "undefined" || !window.localStorage) {
+      setSettingsLoaded(true);
+      return;
+    }
+
+    const readList = (key, fallback) => {
+      const saved = window.localStorage.getItem(key);
+      if (!saved) return fallback;
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length >= 1 && parsed.length <= 5) {
+          return parsed;
+        }
+      } catch {}
+      return fallback;
+    };
+
+    const savedBooks = readList("selectedSportsbooks", DEFAULT_SELECTED);
+    const savedMarkets = readList("selectedPredictionMarkets", DEFAULT_PREDICTION_MARKETS);
+    const savedMode = window.localStorage.getItem("viewMode");
+
+    setSelectedSportsbooks(savedBooks);
+    setSelectedPredictionMarkets(savedMarkets);
+    setViewMode(savedMode === VIEW_MODE_MARKETS ? VIEW_MODE_MARKETS : VIEW_MODE_BOOKS);
+    setSettingsLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!settingsLoaded) return;
     if (typeof window !== "undefined" && window.localStorage && typeof window.localStorage.setItem === "function") {
       window.localStorage.setItem("selectedSportsbooks", JSON.stringify(selectedSportsbooks));
     }
-  }, [selectedSportsbooks]);
+  }, [selectedSportsbooks, settingsLoaded]);
 
   useEffect(() => {
+    if (!settingsLoaded) return;
     if (typeof window !== "undefined" && window.localStorage && typeof window.localStorage.setItem === "function") {
       window.localStorage.setItem("selectedPredictionMarkets", JSON.stringify(selectedPredictionMarkets));
     }
-  }, [selectedPredictionMarkets]);
+  }, [selectedPredictionMarkets, settingsLoaded]);
 
   useEffect(() => {
+    if (!settingsLoaded) return;
     if (typeof window !== "undefined" && window.localStorage && typeof window.localStorage.setItem === "function") {
       window.localStorage.setItem("viewMode", viewMode);
     }
-  }, [viewMode]);
+  }, [viewMode, settingsLoaded]);
 
   const addSportsbook = (key) => {
     if (selectedSportsbooks.length >= 5) return false;

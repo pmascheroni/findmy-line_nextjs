@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { getAdminFirestore } from "@/lib/firebaseAdmin";
-import { Timestamp } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
   apiVersion: "2024-04-10",
@@ -10,11 +10,19 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
 async function updateSubscriptionByCustomerId(customerId, data) {
   if (!customerId) return;
   const adminFirestore = getAdminFirestore();
-  const snapshot = await adminFirestore
+  let snapshot = await adminFirestore
     .collection("Subscriptions")
     .where("stripeCustomerId", "==", customerId)
     .limit(1)
     .get();
+
+  if (snapshot.empty) {
+    snapshot = await adminFirestore
+      .collection("Subscriptions")
+      .where("stripe_customer_id", "==", customerId)
+      .limit(1)
+      .get();
+  }
 
   if (snapshot.empty) {
     console.warn("No subscription found for customer:", customerId);
@@ -47,15 +55,16 @@ export async function POST(req) {
       case "checkout.session.completed": {
         const session = event.data.object;
         if (session.customer) {
+          const plan = session.metadata?.plan;
           await updateSubscriptionByCustomerId(session.customer, {
             stripeCustomerId: session.customer,
-            stripe_customer_id: session.customer,
             stripeSubscriptionId: session.subscription || null,
-            stripe_subscription_id: session.subscription || null,
             subscriptionStatus: "active",
-            subscription_status: "active",
-            subscriptionPlan: session.metadata?.plan || undefined,
-            subscription_plan: session.metadata?.plan || undefined,
+            subscriptionPlan: plan || undefined,
+            stripe_customer_id: FieldValue.delete(),
+            stripe_subscription_id: FieldValue.delete(),
+            subscription_status: FieldValue.delete(),
+            ...(plan ? { subscription_plan: FieldValue.delete() } : {}),
           });
         }
         break;
@@ -81,17 +90,19 @@ export async function POST(req) {
             : undefined;
 
         await updateSubscriptionByCustomerId(subscription.customer, {
+          stripeCustomerId: subscription.customer,
           stripeSubscriptionId: subscription.id,
-          stripe_subscription_id: subscription.id,
           subscriptionStatus: isActive ? "active" : "inactive",
-          subscription_status: isActive ? "active" : "inactive",
           subscriptionPeriodEnd: periodEnd,
-          subscription_expires_at: periodEnd,
           subscriptionCancelAtPeriodEnd: subscription.cancel_at_period_end || false,
-          subscription_cancel_at_period_end: subscription.cancel_at_period_end || false,
           subscriptionStatusRaw: status,
           ...(plan ? { subscriptionPlan: plan } : {}),
-          ...(plan ? { subscription_plan: plan } : {}),
+          stripe_customer_id: FieldValue.delete(),
+          stripe_subscription_id: FieldValue.delete(),
+          subscription_status: FieldValue.delete(),
+          subscription_expires_at: FieldValue.delete(),
+          subscription_cancel_at_period_end: FieldValue.delete(),
+          ...(plan ? { subscription_plan: FieldValue.delete() } : {}),
         });
         break;
       }
@@ -99,8 +110,10 @@ export async function POST(req) {
         const invoice = event.data.object;
         if (invoice.customer) {
           await updateSubscriptionByCustomerId(invoice.customer, {
+            stripeCustomerId: invoice.customer,
             subscriptionStatus: "active",
-            subscription_status: "active",
+            subscription_status: FieldValue.delete(),
+            stripe_customer_id: FieldValue.delete(),
           });
         }
         break;
@@ -109,8 +122,10 @@ export async function POST(req) {
         const invoice = event.data.object;
         if (invoice.customer) {
           await updateSubscriptionByCustomerId(invoice.customer, {
+            stripeCustomerId: invoice.customer,
             subscriptionStatus: "inactive",
-            subscription_status: "inactive",
+            subscription_status: FieldValue.delete(),
+            stripe_customer_id: FieldValue.delete(),
           });
         }
         break;

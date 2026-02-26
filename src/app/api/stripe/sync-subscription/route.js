@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
-import { Timestamp } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getAdminAuth, getAdminFirestore } from "@/lib/firebaseAdmin";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
@@ -65,23 +65,26 @@ export async function POST(req) {
         : priceId === process.env.STRIPE_PRICE_ROOKIE
         ? "rookie"
         : undefined;
+    const existingPlan = subscriptionData?.subscriptionPlan || subscriptionData?.subscription_plan || null;
+    const normalizedPlan = plan || existingPlan || null;
 
     const normalizedCustomerId = subscription.customer || stripeCustomerId || null;
 
     await subscriptionRef.set(
       {
         stripeCustomerId: normalizedCustomerId,
-        stripe_customer_id: normalizedCustomerId,
         stripeSubscriptionId: subscription.id,
-        stripe_subscription_id: subscription.id,
         subscriptionStatus: isActive ? "active" : "inactive",
-        subscription_status: isActive ? "active" : "inactive",
         subscriptionStatusRaw: status,
         subscriptionPeriodEnd: periodEnd,
-        subscription_expires_at: periodEnd,
         subscriptionCancelAtPeriodEnd: subscription.cancel_at_period_end || false,
-        subscription_cancel_at_period_end: subscription.cancel_at_period_end || false,
-        ...(plan ? { subscriptionPlan: plan, subscription_plan: plan } : {}),
+        ...(normalizedPlan ? { subscriptionPlan: normalizedPlan } : {}),
+        stripe_customer_id: FieldValue.delete(),
+        stripe_subscription_id: FieldValue.delete(),
+        subscription_status: FieldValue.delete(),
+        subscription_expires_at: FieldValue.delete(),
+        subscription_cancel_at_period_end: FieldValue.delete(),
+        ...(normalizedPlan ? { subscription_plan: FieldValue.delete() } : {}),
       },
       { merge: true }
     );

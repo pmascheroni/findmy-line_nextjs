@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
+import { FieldValue } from "firebase-admin/firestore";
 import { getAdminAuth, getAdminFirestore } from "@/lib/firebaseAdmin";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
@@ -13,6 +14,10 @@ export async function POST(req) {
 
     if (!token) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (!process.env.STRIPE_SECRET_KEY) {
+      return NextResponse.json({ error: "Missing STRIPE_SECRET_KEY" }, { status: 500 });
     }
 
     const adminAuth = getAdminAuth();
@@ -58,13 +63,13 @@ export async function POST(req) {
       });
       stripeCustomerId = customer.id;
       await subscriptionRef.set(
-        { stripeCustomerId, stripe_customer_id: stripeCustomerId },
+        { stripeCustomerId, stripe_customer_id: FieldValue.delete() },
         { merge: true }
       );
     }
 
     await subscriptionRef.set(
-      { subscriptionPlan: plan, subscription_plan: plan },
+      { subscriptionPlan: plan, subscription_plan: FieldValue.delete() },
       { merge: true }
     );
 

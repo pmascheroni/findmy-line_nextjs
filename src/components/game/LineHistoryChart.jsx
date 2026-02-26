@@ -42,6 +42,7 @@ export default function LineHistoryChart({ game, historicalData }) {
   );
   const [historyData, setHistoryData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [hasHydrated, setHasHydrated] = useState(false);
   
   // Get the appropriate sources list based on mode
   const SOURCES = useMemo(() => {
@@ -85,6 +86,10 @@ export default function LineHistoryChart({ game, historicalData }) {
     }
   }, [isMarketsMode, selectedPredictionMarkets]);
 
+  useEffect(() => {
+    setHasHydrated(true);
+  }, []);
+
   // Fetch historical odds data
   useEffect(() => {
     setLoading(true);
@@ -103,7 +108,7 @@ export default function LineHistoryChart({ game, historicalData }) {
     
     if (historyData.length === 0) {
       // Show current odds only if no history
-      const currentPoint = { time: format(new Date(), "HH:mm") };
+      const currentPoint = { time: hasHydrated ? format(new Date(), "HH:mm") : "—" };
       selectedBooks.forEach(bookKey => {
         const bookmaker = game.bookmakers?.find(b => b.key === bookKey);
         const market = bookmaker?.markets?.find(m => m.key === selectedMarket);
@@ -140,7 +145,7 @@ export default function LineHistoryChart({ game, historicalData }) {
     });
 
     return points;
-  }, [historyData, selectedBooks, game, selectedMarket, selectedOutcome, isMarketsMode]);
+  }, [historyData, selectedBooks, game, selectedMarket, selectedOutcome, isMarketsMode, hasHydrated]);
 
   // Calculate trend for each book
   const getTrend = (bookKey) => {

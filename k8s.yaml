@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: findmy-line-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: findmy-line
+  template:
+    metadata:
+      labels:
+        app: findmy-line
+    spec:
+      containers:
+        - name: nextjs-container
+          image: findmy-line:v2
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - secretRef:
+                name: app-secrets
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: findmy-line-service
+spec:
+  type: NodePort
+  selector:
+    app: findmy-line
+  ports:
+    - protocol: TCP
+      port: 3000
+      targetPort: 3000
+      nodePort: 30001

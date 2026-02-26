@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAdminAuth, getAdminFirestore } from "@/lib/firebaseAdmin";
-import { Timestamp } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 export async function POST(req) {
   try {
@@ -38,7 +38,11 @@ export async function POST(req) {
 
     const alreadyRedeemed = inviteData.redeemedBy && inviteData.redeemedBy !== uid;
     if (alreadyRedeemed) {
-      return NextResponse.json({ ok: true, already_redeemed: true, subscription_expires_at: expiresAt?.toISOString() || null });
+      return NextResponse.json({
+        ok: true,
+        already_redeemed: true,
+        subscriptionExpiresAt: expiresAt?.toISOString() || null,
+      });
     }
 
     if (!inviteData.redeemedBy) {
@@ -55,11 +59,11 @@ export async function POST(req) {
     await subscriptionRef.set(
       {
         subscriptionStatus: "active",
-        subscription_status: "active",
         subscriptionPeriodEnd: inviteData.expiresAt || null,
-        subscription_expires_at: inviteData.expiresAt || null,
         inviteTokenId: inviteToken,
-        invite_token_id: inviteToken,
+        subscription_status: FieldValue.delete(),
+        subscription_expires_at: FieldValue.delete(),
+        invite_token_id: FieldValue.delete(),
       },
       { merge: true }
     );
@@ -67,7 +71,7 @@ export async function POST(req) {
     return NextResponse.json({
       ok: true,
       already_redeemed: !!inviteData.redeemedBy,
-      subscription_expires_at: expiresAt?.toISOString() || null,
+      subscriptionExpiresAt: expiresAt?.toISOString() || null,
     });
   } catch (error) {
     console.error("Invite redeem error:", error);

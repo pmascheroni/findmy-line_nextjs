@@ -136,6 +136,7 @@ function LayoutContent({ children, userLocation, onStartTour }) {
             <div className="flex items-center gap-1 sm:gap-2">
               <Link
                 href={createPageUrl("BetCheckout")}
+                prefetch={false}
                 data-tour="bet-slip"
                 className="relative flex items-center gap-2 px-2 sm:px-3 py-2 rounded-lg text-sm font-medium transition-all text-slate-400 hover:text-white hover:bg-slate-800/50"
               >

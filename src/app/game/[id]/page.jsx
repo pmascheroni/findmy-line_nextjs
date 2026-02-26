@@ -86,6 +86,7 @@ export default function GameDetail() {
   const [propsLoading, setPropsLoading] = useState(false);
   const [propsError, setPropsError] = useState(null);
   const propsLoadedRef = useRef(false);
+  const [hasHydrated, setHasHydrated] = useState(false);
   const { getTeam, teams } = useTeamData();
   const { isPaid } = useSubscription();
   const { isMarketsMode, selectedSportsbooks } = useSettings();
@@ -101,6 +102,10 @@ export default function GameDetail() {
     }
     return shouldShow;
   });
+
+  useEffect(() => {
+    setHasHydrated(true);
+  }, []);
 
   const generateGameDetails = (existingGame) => {
     const BOOKMAKERS = ["draftkings", "fanduel", "betmgm", "williamhill_us", "espnbet"];
@@ -571,7 +576,8 @@ export default function GameDetail() {
   }
 
   const gameTime = new Date(game.commence_time);
-  const isLive = new Date() > gameTime && !game.completed;
+  const isLive = hasHydrated ? new Date() > gameTime && !game.completed : false;
+  const timeLabel = hasHydrated ? format(gameTime, "EEEE, MMMM d · h:mm a") : "Scheduled";
 
   const awayTeam = getTeam(game.away_team, game.sport_key);
   const homeTeam = getTeam(game.home_team, game.sport_key);
@@ -638,7 +644,7 @@ export default function GameDetail() {
             ) : (
               <span className="flex items-center gap-2 text-slate-400 text-sm">
                 <Clock className="w-4 h-4" />
-                {format(gameTime, "EEEE, MMMM d · h:mm a")}
+                {timeLabel}
               </span>
             )}
           </div>

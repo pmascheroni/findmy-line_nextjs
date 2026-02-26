@@ -19,6 +19,7 @@ const DEFAULT_MARKETS = (process.env.ODDS_API_MARKETS || "h2h,spreads,totals")
 
 const ALLOWED_MARKETS = new Set([
   ...DEFAULT_MARKETS,
+  "outrights",
   "alternate_spreads",
   "alternate_totals",
   "team_totals_home",

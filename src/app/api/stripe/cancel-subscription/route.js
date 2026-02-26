@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
+import { FieldValue } from "firebase-admin/firestore";
 import { getAdminAuth, getAdminFirestore } from "@/lib/firebaseAdmin";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
@@ -48,9 +49,9 @@ export async function POST(req) {
     await subscriptionRef.set(
       {
         subscriptionCancelAtPeriodEnd: true,
-        subscription_cancel_at_period_end: true,
         stripeSubscriptionId: subscription.id,
-        stripe_subscription_id: subscription.id,
+        subscription_cancel_at_period_end: FieldValue.delete(),
+        stripe_subscription_id: FieldValue.delete(),
       },
       { merge: true }
     );

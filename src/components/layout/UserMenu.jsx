@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { createPageUrl } from "@/utils";
 import { User, ChevronDown, Settings, LogOut, Crown } from "lucide-react";
 import {
@@ -14,7 +13,6 @@ import { useSubscription } from "../subscription/SubscriptionContext";
 import { useAuth } from "@/lib/AuthContext";
 
 export default function UserMenu() {
-  const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const { user, signOut, loading } = useAuth();
   const { isPaid } = useSubscription();
@@ -55,13 +53,13 @@ export default function UserMenu() {
 
   if (!user) {
     return (
-      <button
-        onClick={() => router.push("/sign-in")}
+      <Link
+        href="/sign-in"
         className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all"
       >
         <User className="w-4 h-4" />
         <span className="hidden sm:inline">Sign In</span>
-      </button>
+      </Link>
     );
   }
 

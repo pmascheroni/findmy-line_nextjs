@@ -71,7 +71,7 @@ function TrialCountdown({ endDate }) {
 
 export default function Account() {
   const router = useRouter();
-  const { user, userDoc: authUserDoc, loading: authLoading, updateProfileName } = useAuth();
+  const { user, loading: authLoading, updateProfileName } = useAuth();
   const { userDoc, isPaid, refreshSubscription } = useSubscription();
   const { selectedSportsbooks, addSportsbook, removeSportsbook } = useSettings();
 
@@ -88,9 +88,9 @@ export default function Account() {
 
   useEffect(() => {
     if (user) {
-      setFullName(user.displayName || authUserDoc?.fullName || "");
+      setFullName(user.displayName || userDoc?.fullName || "");
     }
-  }, [user, authUserDoc]);
+  }, [user, userDoc]);
 
   const handleSaveName = async () => {
     setSaving(true);

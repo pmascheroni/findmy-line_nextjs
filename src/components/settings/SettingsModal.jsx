@@ -85,7 +85,7 @@ export default function SettingsModal({ open, onOpenChange, initialTab = "books"
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent data-tour="settings-content" className="bg-slate-900 border-slate-800 text-white max-w-md max-h-[85vh] flex flex-col z-[105]">
+      <DialogContent data-tour="settings-content" className="bg-slate-900 border-slate-800 text-white max-w-md max-h-[85vh] flex flex-col min-h-0 z-[105]">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold">Settings</DialogTitle>
           <DialogDescription className="sr-only">
@@ -117,7 +117,7 @@ export default function SettingsModal({ open, onOpenChange, initialTab = "books"
           </button>
         </div>
         
-        <div className="flex flex-col flex-1 overflow-hidden">
+        <div className="flex flex-col flex-1 overflow-hidden min-h-0">
           {/* Replace Mode Banner */}
           {replaceMode && (
             <div className="bg-orange-500/20 border border-orange-500/50 rounded-lg p-3 mb-4">
@@ -212,7 +212,7 @@ export default function SettingsModal({ open, onOpenChange, initialTab = "books"
               </div>
 
               {/* Available Items List */}
-              <ScrollArea className="flex-1 -mx-2 px-2">
+              <ScrollArea className="flex-1 -mx-2 px-2 min-h-0">
                 <div className="space-y-4 pb-2">
                   {Object.entries(groupedItems).map(([region, items]) => (
                     <div key={region}>

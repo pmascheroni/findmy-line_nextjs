@@ -3,74 +3,34 @@
 import { createContext, useContext, useEffect, useMemo, useState, useCallback } from "react";
 import {
   createUserWithEmailAndPassword,
+  GoogleAuthProvider,
   onAuthStateChanged,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
+  signInWithPopup,
   signOut as firebaseSignOut,
   updateProfile,
 } from "firebase/auth";
-import { doc, getDoc, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
-import { auth, db } from "@/lib/firebaseClient";
+import { auth } from "@/lib/firebaseClient";
 
 const AuthContext = createContext(null);
 
-async function ensureUserDoc(user, extra = {}) {
-  if (!user || !db) return null;
-  const ref = doc(db, "users", user.uid);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) {
-    await setDoc(ref, {
-      email: user.email || null,
-      createdAt: serverTimestamp(),
-      fullName: user.displayName || null,
-      hideOnboardingTour: false,
-      ...extra,
-    });
-  } else if (extra && Object.keys(extra).length > 0) {
-    await updateDoc(ref, extra);
-  }
-  return ref;
-}
-
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [userDoc, setUserDoc] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!auth || !db) {
+    if (!auth) {
       setLoading(false);
       return undefined;
     }
 
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser || null);
-      try {
-        if (firebaseUser) {
-          await ensureUserDoc(firebaseUser);
-          const ref = doc(db, "users", firebaseUser.uid);
-          const snap = await getDoc(ref);
-          setUserDoc(snap.exists() ? snap.data() : null);
-        } else {
-          setUserDoc(null);
-        }
-      } catch (error) {
-        console.error("Auth sync error:", error);
-        setUserDoc(null);
-      } finally {
-        setLoading(false);
-      }
+      setLoading(false);
     });
     return unsubscribe;
   }, []);
-
-  const refreshUserDoc = useCallback(async () => {
-    if (!user || !db) return null;
-    const ref = doc(db, "users", user.uid);
-    const snap = await getDoc(ref);
-    const data = snap.exists() ? snap.data() : null;
-    setUserDoc(data);
-    return data;
-  }, [user]);
 
   const signUp = useCallback(async ({ email, password, fullName }) => {
     if (!auth) {
@@ -80,7 +40,6 @@ export function AuthProvider({ children }) {
     if (fullName) {
       await updateProfile(result.user, { displayName: fullName });
     }
-    await ensureUserDoc(result.user, { fullName: fullName || null });
     return result.user;
   }, []);
 
@@ -89,7 +48,6 @@ export function AuthProvider({ children }) {
       throw new Error("Firebase auth is not initialized");
     }
     const result = await signInWithEmailAndPassword(auth, email, password);
-    await ensureUserDoc(result.user);
     return result.user;
   }, []);
 
@@ -98,28 +56,65 @@ export function AuthProvider({ children }) {
     await firebaseSignOut(auth);
   }, []);
 
-  const updateProfileName = useCallback(
-    async (fullName) => {
-      if (!user) return;
-      await updateProfile(user, { displayName: fullName });
-      await ensureUserDoc(user, { fullName });
-      await refreshUserDoc();
-    },
-    [user, refreshUserDoc]
-  );
+  const resetPassword = useCallback(async (email) => {
+    if (!auth) {
+      throw new Error("Firebase auth is not initialized");
+    }
+    if (!email) {
+      throw new Error("Email is required");
+    }
+    const trimmedEmail = email.trim();
+    const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "").trim();
+    const origin =
+      baseUrl ||
+      (typeof window !== "undefined" && window.location ? window.location.origin : "");
+    const redirectBase = origin ? origin.replace(/\/$/, "") : "";
+    const actionCodeSettings = redirectBase
+      ? { url: `${redirectBase}/sign-in`, handleCodeInApp: false }
+      : undefined;
+    if (actionCodeSettings) {
+      await sendPasswordResetEmail(auth, trimmedEmail, actionCodeSettings);
+    } else {
+      await sendPasswordResetEmail(auth, trimmedEmail);
+    }
+  }, []);
+
+  const signInWithGoogle = useCallback(async () => {
+    if (!auth) {
+      throw new Error("Firebase auth is not initialized");
+    }
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: "select_account" });
+    const result = await signInWithPopup(auth, provider);
+    return result.user;
+  }, []);
+
+  const updateProfileName = useCallback(async (fullName) => {
+    if (!user) return;
+    await updateProfile(user, { displayName: fullName });
+  }, [user]);
 
   const value = useMemo(
     () => ({
       user,
-      userDoc,
       loading,
       signUp,
       signIn,
       signOut,
-      refreshUserDoc,
+      resetPassword,
+      signInWithGoogle,
       updateProfileName,
     }),
-    [user, userDoc, loading, signUp, signIn, signOut, refreshUserDoc, updateProfileName]
+    [
+      user,
+      loading,
+      signUp,
+      signIn,
+      signOut,
+      resetPassword,
+      signInWithGoogle,
+      updateProfileName,
+    ]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

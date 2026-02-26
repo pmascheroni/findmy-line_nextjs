@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { format, isToday, isSameDay } from "date-fns";
-import { Loader2, AlertCircle, RefreshCw, Trophy, ChevronDown, ChevronRight, HelpCircle } from "lucide-react";
+import { Loader2, AlertCircle, RefreshCw, Trophy, ChevronDown, ChevronRight, HelpCircle, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { motion } from "framer-motion";
 import SportFilter from "@/components/odds/SportFilter";
 import DatePicker from "@/components/odds/DatePicker";
@@ -15,13 +16,34 @@ import OnboardingTour from "@/components/onboarding/OnboardingTour";
 import { useOnboarding } from "@/components/onboarding/useOnboarding";
 import SettingsModal from "@/components/settings/SettingsModal";
 import { TOP_SPORTS, EXTRA_SPORTS, ALL_CATEGORIES, TOP_IDS } from "@/lib/sportsCatalog";
+import PredictionMarketCard from "@/components/prediction/PredictionMarketCard";
 
 const BOOKMAKERS = "draftkings,fanduel,betmgm,williamhill_us,espnbet";
 const MAX_GAMES_PER_CATEGORY = 10;
 const AUTO_REFRESH_MS = 5 * 60 * 1000;
+const PREDICTION_CATEGORIES = [
+  { id: "sports", name: "Sports", icon: "🏆" },
+  { id: "politics", name: "Politics", icon: "🏛️" },
+  { id: "pop-culture", name: "Pop Culture", icon: "🎬" },
+  { id: "economics", name: "Economics", icon: "📈" },
+  { id: "crypto", name: "Crypto", icon: "₿" },
+  { id: "elections", name: "Elections", icon: "🗳️" },
+  { id: "other", name: "Other", icon: "✨" },
+];
+const PREDICTION_CATEGORY_LABELS = PREDICTION_CATEGORIES.reduce((acc, category) => {
+  acc[category.id] = category.name;
+  return acc;
+}, {});
 
 export default function Home() {
   const [selectedSport, setSelectedSport] = useState("all");
+  const [predictionCategory, setPredictionCategory] = useState("sports");
+  const [predictionSearch, setPredictionSearch] = useState("");
+  const [predictionMarkets, setPredictionMarkets] = useState([]);
+  const [predictionLoading, setPredictionLoading] = useState(false);
+  const [predictionError, setPredictionError] = useState(null);
+  const [predictionExpanded, setPredictionExpanded] = useState(false);
+  const [predictionLastUpdated, setPredictionLastUpdated] = useState(null);
   const [selectedDate, setSelectedDate] = useState(() => {
     const saved =
       typeof window !== "undefined" &&
@@ -64,6 +86,7 @@ export default function Home() {
   const summaryLoaded = summary && Object.keys(summary).length > 0;
   const summaryLoadedRef = useRef(false);
   const isPro = userDoc?.subscriptionPlan === "pro";
+  const showSportsView = !isMarketsMode || predictionCategory === "sports";
 
   useEffect(() => {
     const handleStartTour = () => {
@@ -117,9 +140,46 @@ export default function Home() {
     }
   }, [safeSelectedDate, tzOffset]);
 
+  const fetchPredictionMarkets = useCallback(
+    async ({ force = false } = {}) => {
+      if (!isMarketsMode || predictionCategory === "sports") return;
+      setPredictionLoading(true);
+      setPredictionError(null);
+      try {
+        const params = new URLSearchParams();
+        params.set("category", predictionCategory);
+        params.set("limit", "50");
+        if (predictionSearch.trim()) {
+          params.set("search", predictionSearch.trim());
+        }
+        if (force) {
+          params.set("ts", String(Date.now()));
+        }
+        const res = await fetch(`/api/prediction/markets?${params.toString()}`, {
+          cache: "no-store",
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data?.error || "Failed to load prediction markets");
+        }
+        setPredictionMarkets(data.markets || []);
+        const upstreamErrors = Object.values(data.errors || {}).filter(Boolean);
+        setPredictionError(upstreamErrors[0] || null);
+        setPredictionLastUpdated(new Date());
+      } catch (err) {
+        setPredictionError(err?.message || "Failed to load prediction markets");
+        setPredictionMarkets([]);
+      } finally {
+        setPredictionLoading(false);
+      }
+    },
+    [isMarketsMode, predictionCategory, predictionSearch]
+  );
+
   useEffect(() => {
+    if (!showSportsView) return;
     fetchSummary();
-  }, [fetchSummary]);
+  }, [fetchSummary, showSportsView]);
 
   useEffect(() => {
     if (summaryLoaded) summaryLoadedRef.current = true;
@@ -133,6 +193,34 @@ export default function Home() {
     setErrorsByCategory({});
     setApiError(null);
   }, [safeSelectedDate, isMarketsMode, selectedPredictionMarkets, selectedSportsbooks]);
+
+  useEffect(() => {
+    if (!isMarketsMode) {
+      setPredictionCategory("sports");
+      setPredictionSearch("");
+      setPredictionMarkets([]);
+      setPredictionError(null);
+      setPredictionExpanded(false);
+    }
+  }, [isMarketsMode]);
+
+  useEffect(() => {
+    if (!isMarketsMode || predictionCategory === "sports") return;
+    setPredictionExpanded(false);
+    setPredictionError(null);
+    const timer = setTimeout(() => {
+      fetchPredictionMarkets();
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [isMarketsMode, predictionCategory, predictionSearch, fetchPredictionMarkets]);
+
+  useEffect(() => {
+    if (predictionCategory === "sports") {
+      setPredictionMarkets([]);
+      setPredictionError(null);
+      setPredictionExpanded(false);
+    }
+  }, [predictionCategory]);
 
   const availableTopSports = useMemo(() => {
     if (!summaryLoaded) return [];
@@ -148,6 +236,11 @@ export default function Home() {
     const base = [{ id: "all", name: "All", icon: "🏆" }];
     return base.concat([...availableTopSports, ...availableExtraSports]);
   }, [availableTopSports, availableExtraSports]);
+
+  const visiblePredictionMarkets = useMemo(() => {
+    if (predictionExpanded) return predictionMarkets;
+    return predictionMarkets.slice(0, 5);
+  }, [predictionExpanded, predictionMarkets]);
 
   useEffect(() => {
     if (!navSports.find((sport) => sport.id === selectedSport)) {
@@ -319,14 +412,16 @@ export default function Home() {
   );
 
   useEffect(() => {
+    if (!showSportsView) return;
     if (selectedSport !== "all") return;
     if (summaryLoading) return;
     if (!summaryLoadedRef.current) return;
     if (availableTopSports.length === 0) return;
     fetchTopOdds(availableTopSports);
-  }, [selectedSport, availableTopSports, summaryLoading, fetchTopOdds]);
+  }, [showSportsView, selectedSport, availableTopSports, summaryLoading, fetchTopOdds]);
 
   useEffect(() => {
+    if (!showSportsView) return;
     if (selectedSport === "all") return;
     const category = ALL_CATEGORIES.find((sport) => sport.id === selectedSport);
     if (!category) return;
@@ -338,7 +433,7 @@ export default function Home() {
         await loadCategoryEvents(category);
       }
     })();
-  }, [selectedSport, getOddsKeysForCategory, loadCategoryOdds, loadCategoryEvents]);
+  }, [showSportsView, selectedSport, getOddsKeysForCategory, loadCategoryOdds, loadCategoryEvents]);
 
   const handleExpandCategory = async (category) => {
     if (!loadedCategories.includes(category.id)) {
@@ -379,6 +474,10 @@ export default function Home() {
   }, [selectedSport, availableTopSports, expandedCategories, fetchTopOdds, loadCategoryOdds]);
 
   const handleRefresh = async () => {
+    if (!showSportsView) {
+      await fetchPredictionMarkets({ force: true });
+      return;
+    }
     if (isPro) {
       await refreshOdds();
     } else {
@@ -388,12 +487,12 @@ export default function Home() {
   };
 
   useEffect(() => {
-    if (!isPro) return;
+    if (!isPro || !showSportsView) return;
     const interval = setInterval(() => {
       refreshOdds();
     }, AUTO_REFRESH_MS);
     return () => clearInterval(interval);
-  }, [isPro, refreshOdds]);
+  }, [isPro, showSportsView, refreshOdds]);
 
   const renderEventsList = (events = []) => {
     if (!events.length) {
@@ -548,7 +647,12 @@ export default function Home() {
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-white">Today&apos;s Best Lines</h1>
             <p className="text-sm text-slate-400 mt-1">
-              {isMarketsMode ? "Prediction markets" : "Sportsbooks"} · {formatDateLabel()}
+              {isMarketsMode ? "Prediction markets" : "Sportsbooks"}
+              {showSportsView
+                ? ` · ${formatDateLabel()}`
+                : predictionCategory !== "sports"
+                ? ` · ${PREDICTION_CATEGORY_LABELS[predictionCategory] || "Markets"}`
+                : ""}
             </p>
           </div>
 
@@ -559,7 +663,7 @@ export default function Home() {
               onClick={handleRefresh}
               className="text-slate-400 hover:text-white"
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+              <RefreshCw className={`w-4 h-4 ${loading || predictionLoading ? "animate-spin" : ""}`} />
             </Button>
             <Button
               variant="ghost"
@@ -574,114 +678,199 @@ export default function Home() {
 
         {!isPaid && <UpgradeBanner />}
 
-        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-          <div className="flex-1" data-tour="sport-filter">
+        {isMarketsMode && (
+          <div className="flex-1" data-tour="prediction-category">
             <SportFilter
-              sports={navSports}
-              selectedSport={selectedSport}
-              onSelectSport={setSelectedSport}
+              sports={PREDICTION_CATEGORIES}
+              selectedSport={predictionCategory}
+              onSelectSport={(id) => setPredictionCategory(id)}
             />
           </div>
-          <div className="flex items-center gap-2" data-tour="date-picker">
-            <DatePicker selectedDate={safeSelectedDate} onDateChange={setSelectedDate} />
+        )}
+
+        {showSportsView ? (
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+            <div className="flex-1" data-tour="sport-filter">
+              <SportFilter
+                sports={navSports}
+                selectedSport={selectedSport}
+                onSelectSport={setSelectedSport}
+              />
+            </div>
+            <div className="flex items-center gap-2" data-tour="date-picker">
+              <DatePicker selectedDate={safeSelectedDate} onDateChange={setSelectedDate} />
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+              <Input
+                value={predictionSearch}
+                onChange={(event) => setPredictionSearch(event.target.value)}
+                placeholder="Search prediction markets..."
+                className="pl-9 bg-slate-900/50 border-slate-800 text-white"
+              />
+            </div>
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              {predictionLastUpdated && (
+                <span>Updated {format(predictionLastUpdated, "h:mm a")}</span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
-      {apiError && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 text-sm"
-        >
-          <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4" />
-            <span>Live odds are temporarily unavailable.</span>
-          </div>
-        </motion.div>
-      )}
-
-      {loading && !summaryLoading ? (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
-        </div>
-      ) : selectedSport !== "all" ? (
-        (() => {
-          const category = ALL_CATEGORIES.find((sport) => sport.id === selectedSport);
-          const games = category ? gamesByCategory[category.id] || [] : [];
-          const events = category ? eventsByCategory[category.id] || [] : [];
-          const errorMessage = category ? errorsByCategory[category.id] : null;
-          if (!category) {
-            return (
-              <div className="flex items-center justify-center py-20 text-slate-400">
-                <Trophy className="w-12 h-12 mb-3 text-slate-500" />
-                <p>No games found for this category.</p>
+      {showSportsView ? (
+        <>
+          {apiError && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 text-sm"
+            >
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4" />
+                <span>Live odds are temporarily unavailable.</span>
               </div>
-            );
-          }
-          if (loadingCategories[category.id] || loadingEvents[category.id]) {
-            return (
-              <div className="flex items-center justify-center py-20">
-                <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
-              </div>
-            );
-          }
-          if (games.length === 0 && events.length > 0) {
-            return <div className="space-y-4">{renderCategorySection(category, games)}</div>;
-          }
-          if (errorMessage) {
-            return (
-              <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-                <Trophy className="w-12 h-12 mb-3 text-slate-500" />
-                <p>{errorMessage}</p>
-              </div>
-            );
-          }
-          if (games.length === 0) {
-            return (
-              <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-                <Trophy className="w-12 h-12 mb-3 text-slate-500" />
-                <p>No games found for this date.</p>
-              </div>
-            );
-          }
-          return <div className="space-y-4">{renderCategorySection(category, games)}</div>;
-        })()
-      ) : (
-        <div className="space-y-4">
-          {availableTopSports.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-              <Trophy className="w-12 h-12 mb-3 text-slate-500" />
-              <p>No games found for this date.</p>
-            </div>
+            </motion.div>
           )}
 
-          {availableTopSports.map((category) => {
-            const games = gamesByCategory[category.id] || [];
-            const events = eventsByCategory[category.id] || [];
-            if (!games.length && !events.length) return null;
-            return renderCategorySection(category, games);
-          })}
+          {loading && !summaryLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+            </div>
+          ) : selectedSport !== "all" ? (
+            (() => {
+              const category = ALL_CATEGORIES.find((sport) => sport.id === selectedSport);
+              const games = category ? gamesByCategory[category.id] || [] : [];
+              const events = category ? eventsByCategory[category.id] || [] : [];
+              const errorMessage = category ? errorsByCategory[category.id] : null;
+              if (!category) {
+                return (
+                  <div className="flex items-center justify-center py-20 text-slate-400">
+                    <Trophy className="w-12 h-12 mb-3 text-slate-500" />
+                    <p>No games found for this category.</p>
+                  </div>
+                );
+              }
+              if (loadingCategories[category.id] || loadingEvents[category.id]) {
+                return (
+                  <div className="flex items-center justify-center py-20">
+                    <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+                  </div>
+                );
+              }
+              if (games.length === 0 && events.length > 0) {
+                return <div className="space-y-4">{renderCategorySection(category, games)}</div>;
+              }
+              if (errorMessage) {
+                return (
+                  <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+                    <Trophy className="w-12 h-12 mb-3 text-slate-500" />
+                    <p>{errorMessage}</p>
+                  </div>
+                );
+              }
+              if (games.length === 0) {
+                return (
+                  <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+                    <Trophy className="w-12 h-12 mb-3 text-slate-500" />
+                    <p>No games found for this date.</p>
+                  </div>
+                );
+              }
+              return <div className="space-y-4">{renderCategorySection(category, games)}</div>;
+            })()
+          ) : (
+            <div className="space-y-4">
+              {availableTopSports.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+                  <Trophy className="w-12 h-12 mb-3 text-slate-500" />
+                  <p>No games found for this date.</p>
+                </div>
+              )}
 
-          {availableExtraSports.length > 0 && (
-            <div className="space-y-3">
-              <h3 className="text-sm uppercase tracking-wider text-slate-500">More sports today</h3>
-              {availableExtraSports.map((category) => {
+              {availableTopSports.map((category) => {
                 const games = gamesByCategory[category.id] || [];
                 const events = eventsByCategory[category.id] || [];
-                if (games.length > 0 || events.length > 0) {
-                  return renderCategorySection(category, games);
-                }
-                return renderOtherCategoryRow(category);
+                if (!games.length && !events.length) return null;
+                return renderCategorySection(category, games);
               })}
+
+              {availableExtraSports.length > 0 && (
+                <div className="space-y-3">
+                  <h3 className="text-sm uppercase tracking-wider text-slate-500">More sports today</h3>
+                  {availableExtraSports.map((category) => {
+                    const games = gamesByCategory[category.id] || [];
+                    const events = eventsByCategory[category.id] || [];
+                    if (games.length > 0 || events.length > 0) {
+                      return renderCategorySection(category, games);
+                    }
+                    return renderOtherCategoryRow(category);
+                  })}
+                </div>
+              )}
             </div>
           )}
-        </div>
+        </>
+      ) : (
+        <>
+          {predictionError && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 text-sm"
+            >
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4" />
+                <span>{predictionError}</span>
+              </div>
+            </motion.div>
+          )}
+
+          {predictionLoading && predictionMarkets.length === 0 ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+            </div>
+          ) : predictionMarkets.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+              <Trophy className="w-12 h-12 mb-3 text-slate-500" />
+              <p>{predictionSearch.trim() ? "No markets match that search." : "No prediction markets found."}</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {predictionLoading && (
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Refreshing markets...
+                </div>
+              )}
+              {visiblePredictionMarkets.map((market) => (
+                <PredictionMarketCard
+                  key={market.id}
+                  market={market}
+                  categoryLabel={PREDICTION_CATEGORY_LABELS[predictionCategory]}
+                />
+              ))}
+              {predictionMarkets.length > 5 && (
+                <button
+                  onClick={() => setPredictionExpanded((prev) => !prev)}
+                  className="w-full py-2 text-sm text-blue-400 hover:text-blue-300"
+                >
+                  {predictionExpanded
+                    ? "Show less"
+                    : `Show more (${predictionMarkets.length - visiblePredictionMarkets.length})`}
+                </button>
+              )}
+            </div>
+          )}
+        </>
       )}
 
       <SettingsModal open={tourSettingsOpen} onOpenChange={setTourSettingsOpen} />
 
-      {lastUpdated && (
+      {showSportsView && lastUpdated && (
         <div className="text-xs text-slate-500 text-right">Last updated: {format(lastUpdated, "p")}</div>
       )}
     </div>
