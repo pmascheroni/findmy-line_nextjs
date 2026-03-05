@@ -63,6 +63,7 @@ export function AuthProvider({ children }) {
     if (!email) {
       throw new Error("Email is required");
     }
+
     const trimmedEmail = email.trim();
     const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "").trim();
     const origin =
@@ -72,10 +73,21 @@ export function AuthProvider({ children }) {
     const actionCodeSettings = redirectBase
       ? { url: `${redirectBase}/sign-in`, handleCodeInApp: false }
       : undefined;
-    if (actionCodeSettings) {
-      await sendPasswordResetEmail(auth, trimmedEmail, actionCodeSettings);
-    } else {
-      await sendPasswordResetEmail(auth, trimmedEmail);
+
+    try {
+      if (actionCodeSettings) {
+        await sendPasswordResetEmail(auth, trimmedEmail, actionCodeSettings);
+      } else {
+        await sendPasswordResetEmail(auth, trimmedEmail);
+      }
+    } catch (error) {
+      // Common production issue: unauthorized-continue-uri when domain isn't whitelisted.
+      // Fallback to Firebase default reset flow so reset still works.
+      if (actionCodeSettings && (error?.code === "auth/unauthorized-continue-uri" || error?.code === "auth/invalid-continue-uri")) {
+        await sendPasswordResetEmail(auth, trimmedEmail);
+        return;
+      }
+      throw error;
     }
   }, []);
 

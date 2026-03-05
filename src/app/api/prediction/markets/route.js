@@ -37,35 +37,84 @@ const safeJsonParse = (value, fallback) => {
   }
 };
 
-const mapPolymarketCategory = (rawCategory = "") => {
-  const normalized = normalizeText(rawCategory);
+const mapTextToCategory = (rawText = "") => {
+  const normalized = normalizeText(rawText);
   if (!normalized) return "other";
-  if (normalized.includes("sport")) return "sports";
+
+  // Sports + Olympics
+  if (
+    normalized.includes("sport") ||
+    normalized.includes("olympic") ||
+    normalized.includes("nba") ||
+    normalized.includes("nfl") ||
+    normalized.includes("mlb") ||
+    normalized.includes("nhl") ||
+    normalized.includes("ufc") ||
+    normalized.includes("soccer") ||
+    normalized.includes("tennis") ||
+    normalized.includes("golf")
+  ) {
+    return "sports";
+  }
+
   if (normalized.includes("election")) return "elections";
   if (normalized.includes("politic") || normalized.includes("currentaffairs") || normalized.includes("government")) {
     return "politics";
   }
-  if (normalized.includes("popculture") || normalized.includes("entertainment") || normalized.includes("celebrity") || normalized.includes("music") || normalized.includes("movie") || normalized.includes("tv")) {
+  if (
+    normalized.includes("popculture") ||
+    normalized.includes("entertainment") ||
+    normalized.includes("celebrity") ||
+    normalized.includes("music") ||
+    normalized.includes("movie") ||
+    normalized.includes("tv")
+  ) {
     return "pop-culture";
   }
-  if (normalized.includes("crypto")) return "crypto";
-  if (normalized.includes("econom") || normalized.includes("finance") || normalized.includes("business") || normalized.includes("tech") || normalized.includes("company")) {
+  if (normalized.includes("crypto") || normalized.includes("bitcoin") || normalized.includes("ethereum")) {
+    return "crypto";
+  }
+  if (
+    normalized.includes("econom") ||
+    normalized.includes("finance") ||
+    normalized.includes("business") ||
+    normalized.includes("tech") ||
+    normalized.includes("company") ||
+    normalized.includes("inflation") ||
+    normalized.includes("fed")
+  ) {
     return "economics";
   }
   return "other";
 };
 
-const mapKalshiCategory = (rawCategory = "") => {
-  const normalized = normalizeText(rawCategory);
-  if (!normalized) return "other";
-  if (normalized.includes("sport")) return "sports";
-  if (normalized.includes("election")) return "elections";
-  if (normalized.includes("politic") || normalized.includes("government")) return "politics";
-  if (normalized.includes("pop") || normalized.includes("culture") || normalized.includes("entertainment")) return "pop-culture";
-  if (normalized.includes("crypto")) return "crypto";
-  if (normalized.includes("econom") || normalized.includes("finance") || normalized.includes("business") || normalized.includes("market")) return "economics";
-  return "other";
+const mapPolymarketCategory = (market = {}) => {
+  const tags = Array.isArray(market?.tags)
+    ? market.tags
+        .map((tag) => (typeof tag === "string" ? tag : tag?.label || tag?.name || ""))
+        .join(" ")
+    : "";
+  const eventText = Array.isArray(market?.events)
+    ? market.events
+        .map((event) => `${event?.title || ""} ${event?.slug || ""} ${event?.ticker || ""} ${event?.category || ""}`)
+        .join(" ")
+    : "";
+  const combined = [
+    market?.category,
+    market?.question,
+    market?.title,
+    market?.slug,
+    market?.description,
+    tags,
+    eventText,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return mapTextToCategory(combined);
 };
+
+const mapKalshiCategory = (rawCategory = "") => mapTextToCategory(rawCategory);
 
 const buildPolymarketMarkets = (markets, { category, search, limit }) => {
   const searchNormalized = normalizeText(search);
@@ -74,7 +123,7 @@ const buildPolymarketMarkets = (markets, { category, search, limit }) => {
     .map((market) => {
       const outcomes = safeJsonParse(market.outcomes, []);
       const prices = safeJsonParse(market.outcomePrices, []);
-      const normalizedCategory = mapPolymarketCategory(market.category);
+      const normalizedCategory = mapPolymarketCategory(market);
       const parsedOutcomes = (outcomes || [])
         .map((name, idx) => {
           const rawPrice = prices?.[idx];
