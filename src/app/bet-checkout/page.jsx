@@ -170,7 +170,7 @@ export default function BetCheckout() {
       {bets.length > 0 && (
         <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4">
           <p className="text-xs text-amber-400">
-            <strong>Note:</strong> You'll be redirected to the sportsbook's website to complete your bets. Make sure you have an account with the sportsbook before proceeding.
+            <strong>Note:</strong> You&apos;ll be redirected to the sportsbook&apos;s website to complete your bets. Make sure you have an account with the sportsbook before proceeding.
           </p>
         </div>
       )}

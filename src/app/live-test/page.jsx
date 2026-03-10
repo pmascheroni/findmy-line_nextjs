@@ -265,7 +265,7 @@ export default function LiveTest() {
       </div>
       
       <div className="bg-slate-800/30 rounded-lg p-4 text-sm text-slate-500">
-        <p><strong>Note:</strong> This test page passes mock ESPN data to the GameDetail page to simulate what a live game would look like. The actual GameDetail page fetches real data from ESPN's API.</p>
+        <p><strong>Note:</strong> This test page passes mock ESPN data to the GameDetail page to simulate what a live game would look like. The actual GameDetail page fetches real data from ESPN&apos;s API.</p>
       </div>
     </div>
   );

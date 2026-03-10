@@ -175,7 +175,7 @@ export default function About() {
           Contact Us
         </h2>
         <p className="text-slate-400 mb-4">
-          Have questions, feedback, or need assistance? We're here to help.
+          Have questions, feedback, or need assistance? We&apos;re here to help.
         </p>
         <div className="space-y-3">
           <div className="flex items-center gap-3 text-slate-300">
@@ -278,7 +278,7 @@ export default function About() {
         <p className="text-slate-400 mb-6">Start comparing odds across top sportsbooks today.</p>
         <Link href={createPageUrl("Home")}>
           <Button size="lg" className="bg-blue-600 hover:bg-blue-700">
-            Browse Today's Games
+            Browse Today&apos;s Games
             <ChevronRight className="w-5 h-5 ml-1" />
           </Button>
         </Link>
@@ -288,7 +288,7 @@ export default function About() {
       <section className="bg-slate-900/50 rounded-2xl border border-slate-800/50 p-8">
         <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
           <Shield className="w-6 h-6 text-slate-400" />
-          What We Are & What We're Not
+          What We Are & What We&apos;re Not
         </h2>
         <div className="space-y-4 text-slate-400">
           <p>

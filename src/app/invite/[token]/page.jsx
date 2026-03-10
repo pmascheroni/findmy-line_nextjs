@@ -115,7 +115,7 @@ export default function Invite() {
             <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center">
               <Gift className="w-8 h-8 text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-white mb-2">You're Invited!</h1>
+            <h1 className="text-2xl font-bold text-white mb-2">You&apos;re Invited!</h1>
             <p className="text-slate-400 mb-6">
               Sign in or create an account to claim your free Pro access
             </p>
@@ -192,7 +192,7 @@ export default function Invite() {
             </div>
             <h1 className="text-2xl font-bold text-white mb-2">You Already Have Access!</h1>
             <p className="text-slate-400 mb-4">
-              You've already redeemed this invite
+              You&apos;ve already redeemed this invite
             </p>
             {expiresAt && (
               <div className="bg-slate-800/50 rounded-xl p-4 mb-6">

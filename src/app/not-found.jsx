@@ -19,7 +19,7 @@ export default function NotFound() {
           <div className="space-y-3">
             <h2 className="text-2xl font-medium text-slate-800">Page Not Found</h2>
             <p className="text-slate-600 leading-relaxed">
-              The page <span className="font-medium text-slate-700">"{pageName || "unknown"}"</span> could not be found in this application.
+              The page <span className="font-medium text-slate-700">&quot;{pageName || "unknown"}&quot;</span> could not be found in this application.
             </p>
           </div>
 

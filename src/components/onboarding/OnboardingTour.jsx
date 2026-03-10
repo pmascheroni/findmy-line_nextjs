@@ -499,7 +499,7 @@ export default function OnboardingTour({ page = "home", onComplete, onNeverShow,
                   onClick={handleNeverShow}
                   className="w-full bg-transparent border-slate-500 text-white hover:bg-slate-700 hover:text-white text-xs sm:text-sm"
                 >
-                  Don't show this again
+                  Don&apos;t show this again
                 </Button>
               </div>
             </div>
