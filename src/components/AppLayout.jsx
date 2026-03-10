@@ -109,6 +109,15 @@ function LayoutContent({ children, userLocation, onStartTour }) {
                 </SheetContent>
               </Sheet>
 
+              <Link
+                href={createPageUrl("Home")}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all border border-slate-800/60 bg-slate-900/60 text-white hover:bg-slate-800/70 ${
+                  pathname === "/" ? "ring-1 ring-blue-500/40" : ""
+                }`}
+              >
+                <span className="font-semibold text-sm">FindMy-Line</span>
+              </Link>
+
               <button
                 onClick={() => openSettings(isMarketsMode ? "markets" : "books")}
                 data-tour="mode-toggle"
