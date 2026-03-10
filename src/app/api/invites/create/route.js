@@ -34,7 +34,10 @@ export async function POST(req) {
       remainingGlobalSlots: 1,
     });
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const envAppUrl = (process.env.NEXT_PUBLIC_APP_URL || "").trim();
+    const isLocalEnvUrl = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(envAppUrl);
+    const requestOrigin = new URL(req.url).origin;
+    const appUrl = !envAppUrl || isLocalEnvUrl ? requestOrigin : envAppUrl;
 
     return NextResponse.json({
       invite_url: `${appUrl}/invite/${inviteToken}`,
