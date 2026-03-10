@@ -528,28 +528,67 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [isPro, showSportsView, refreshOdds]);
 
-  const renderEventsList = (events = []) => {
-    if (!events.length) {
-      return (
-        <div className="text-sm text-slate-500 px-2">No events available.</div>
-      );
-    }
+  const normalizeName = (value = "") =>
+    String(value || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+
+  const buildCategoryItems = (events = [], games = []) => {
+    const gameMap = new Map();
+
+    games.forEach((game) => {
+      const candidates = [
+        game.id,
+        game.short_title,
+        game.home_team && game.away_team ? `${game.away_team} at ${game.home_team}` : "",
+        game.home_team && game.away_team ? `${game.away_team} vs ${game.home_team}` : "",
+        game.home_team && game.away_team ? `${game.home_team} vs ${game.away_team}` : "",
+      ]
+        .map(normalizeName)
+        .filter(Boolean);
+
+      candidates.forEach((key) => gameMap.set(key, game));
+    });
+
+    const items = [];
+    const usedGameIds = new Set();
+
+    events.forEach((event) => {
+      const eventKeys = [event.id, event.name, event.shortName].map(normalizeName).filter(Boolean);
+      const matchedGame = eventKeys.map((key) => gameMap.get(key)).find(Boolean) || null;
+      if (matchedGame) usedGameIds.add(matchedGame.id);
+      items.push({ type: matchedGame ? "game" : "event", event, game: matchedGame });
+    });
+
+    games.forEach((game) => {
+      if (!usedGameIds.has(game.id)) {
+        items.push({ type: "game", game, event: null });
+      }
+    });
+
+    return items;
+  };
+
+  const renderEventRow = (event) => {
+    if (!event) return null;
     return (
-      <div className="space-y-2">
-        {events.map((event) => (
-          <div
-            key={event.id}
-            className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 rounded-lg border border-slate-800/60 bg-slate-900/40 px-3 py-2"
-          >
-            <div>
-              <div className="text-sm text-white font-medium">{event.name}</div>
-              {event.shortName && event.shortName !== event.name && (
-                <div className="text-xs text-slate-400">{event.shortName}</div>
-              )}
-            </div>
-            <div className="text-xs text-slate-500">{event.status || "Scheduled"}</div>
+      <div
+        key={event.id}
+        className="rounded-xl border border-slate-800/60 bg-slate-900/40 px-4 py-3"
+      >
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-sm text-white font-medium">{event.name}</div>
+            {event.shortName && event.shortName !== event.name && (
+              <div className="text-xs text-slate-400">{event.shortName}</div>
+            )}
           </div>
-        ))}
+          <div className="text-xs text-slate-500">{event.status || "Scheduled"}</div>
+        </div>
+        <div className="mt-3 rounded-lg border border-slate-800/60 bg-slate-950/50 px-3 py-2 text-xs text-slate-400">
+          Odds unavailable for this event from the current odds providers.
+        </div>
       </div>
     );
   };
@@ -559,9 +598,9 @@ export default function Home() {
     const isExpanded = expandedCategories.includes(category.id);
     const events = eventsByCategory[category.id] || [];
     const categoryError = errorsByCategory[category.id];
-    const visibleGames = isExpanded ? games : games.slice(0, MAX_GAMES_PER_CATEGORY);
-    const showMore = games.length > MAX_GAMES_PER_CATEGORY;
-    const showEvents = games.length === 0 && events.length > 0;
+    const categoryItems = buildCategoryItems(events, games);
+    const visibleItems = isExpanded ? categoryItems : categoryItems.slice(0, MAX_GAMES_PER_CATEGORY);
+    const showMore = categoryItems.length > MAX_GAMES_PER_CATEGORY;
 
     return (
       <div key={category.id} className="space-y-3">
@@ -574,7 +613,7 @@ export default function Home() {
             <div className="text-left">
               <h3 className="text-sm font-semibold text-white">{category.name}</h3>
               <p className="text-xs text-slate-500">
-                {showEvents ? `${events.length} events` : `${games.length} games`}
+                {`${categoryItems.length} events`}
               </p>
             </div>
           </div>
@@ -587,16 +626,16 @@ export default function Home() {
 
         {!isCollapsed && (
           <div className="space-y-3">
-            {showEvents && categoryError && (
-              <div className="text-xs text-slate-400 px-2">
-                Odds not available via Odds API.
-              </div>
+            {categoryError && (
+              <div className="text-xs text-slate-400 px-2">{categoryError}</div>
             )}
-            {showEvents ? renderEventsList(events) : null}
-            {!showEvents &&
-              visibleGames.map((game, index) => (
-                <GameCard key={game.id} game={game} index={index} />
-              ))}
+            {visibleItems.map((item, index) =>
+              item.type === "game" && item.game ? (
+                <GameCard key={item.game.id} game={item.game} index={index} />
+              ) : (
+                renderEventRow(item.event)
+              )
+            )}
             {showMore && (
               <button
                 onClick={() => handleToggleExpanded(category.id)}
