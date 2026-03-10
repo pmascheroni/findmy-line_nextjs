@@ -236,10 +236,25 @@ export default function Home() {
     return TOP_SPORTS.filter((sport) => (summary[sport.id] || 0) > 0);
   }, [summary, summaryLoaded]);
 
+  const isSportVisibleForDate = useCallback((sport) => {
+    if (!sport?.visibilityWindow) return false;
+    const selected = new Date(safeSelectedDate);
+    if (Number.isNaN(selected.getTime())) return false;
+
+    const selectedDay = new Date(selected);
+    selectedDay.setHours(0, 0, 0, 0);
+
+    const start = new Date(`${sport.visibilityWindow.start}T00:00:00`);
+    const end = new Date(`${sport.visibilityWindow.end}T23:59:59`);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return false;
+
+    return selectedDay >= start && selectedDay <= end;
+  }, [safeSelectedDate]);
+
   const availableExtraSports = useMemo(() => {
     if (!summaryLoaded) return [];
-    return EXTRA_SPORTS.filter((sport) => sport.alwaysShow || (summary[sport.id] || 0) > 0);
-  }, [summary, summaryLoaded]);
+    return EXTRA_SPORTS.filter((sport) => isSportVisibleForDate(sport) || (summary[sport.id] || 0) > 0);
+  }, [summary, summaryLoaded, isSportVisibleForDate]);
 
   const navSports = useMemo(() => {
     const base = [{ id: "all", name: "All", icon: "🏆" }];
