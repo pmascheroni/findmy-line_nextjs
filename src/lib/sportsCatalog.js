@@ -19,7 +19,10 @@ export const EXTRA_SPORTS = [
     icon: "🌍",
     espnPaths: ["soccer/fifa.world"],
     oddsKeys: ["soccer_fifa_world_cup"],
-    alwaysShow: true,
+    visibilityWindow: {
+      start: "2026-06-04",
+      end: "2026-07-19",
+    },
   },
 ];
 
