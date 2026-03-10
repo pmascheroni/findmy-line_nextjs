@@ -16,7 +16,7 @@ import OnboardingTour from "@/components/onboarding/OnboardingTour";
 import { useOnboarding } from "@/components/onboarding/useOnboarding";
 import SettingsModal from "@/components/settings/SettingsModal";
 import { TOP_SPORTS, EXTRA_SPORTS, ALL_CATEGORIES, TOP_IDS } from "@/lib/sportsCatalog";
-import PredictionMarketCard from "@/components/prediction/PredictionMarketCard";
+import PredictionMarketComparisonTable from "@/components/prediction/PredictionMarketComparisonTable";
 
 const BOOKMAKERS = "draftkings,fanduel,betmgm,williamhill_us,espnbet";
 const MAX_GAMES_PER_CATEGORY = 10;
@@ -152,6 +152,9 @@ export default function Home() {
         if (predictionSearch.trim()) {
           params.set("search", predictionSearch.trim());
         }
+        if (Array.isArray(selectedPredictionMarkets) && selectedPredictionMarkets.length > 0) {
+          params.set("sources", selectedPredictionMarkets.join(","));
+        }
         if (force) {
           params.set("ts", String(Date.now()));
         }
@@ -162,9 +165,15 @@ export default function Home() {
         if (!res.ok) {
           throw new Error(data?.error || "Failed to load prediction markets");
         }
-        setPredictionMarkets(data.markets || []);
+        setPredictionMarkets(data.groupedMarkets || []);
+        const rejectedSources = Array.isArray(data.rejectedSources) ? data.rejectedSources : [];
         const upstreamErrors = Object.values(data.errors || {}).filter(Boolean);
-        setPredictionError(upstreamErrors[0] || null);
+        setPredictionError(
+          upstreamErrors[0] ||
+            (rejectedSources.length > 0
+              ? `${rejectedSources.join(", ")} not supported yet for prediction-market data.`
+              : null)
+        );
         setPredictionLastUpdated(new Date());
       } catch (err) {
         setPredictionError(err?.message || "Failed to load prediction markets");
@@ -173,7 +182,7 @@ export default function Home() {
         setPredictionLoading(false);
       }
     },
-    [isMarketsMode, predictionCategory, predictionSearch]
+    [isMarketsMode, predictionCategory, predictionSearch, selectedPredictionMarkets]
   );
 
   useEffect(() => {
@@ -229,7 +238,7 @@ export default function Home() {
 
   const availableExtraSports = useMemo(() => {
     if (!summaryLoaded) return [];
-    return EXTRA_SPORTS.filter((sport) => (summary[sport.id] || 0) > 0);
+    return EXTRA_SPORTS.filter((sport) => sport.alwaysShow || (summary[sport.id] || 0) > 0);
   }, [summary, summaryLoaded]);
 
   const navSports = useMemo(() => {
@@ -312,7 +321,12 @@ export default function Home() {
       if (!category) return;
       if (!force && eventsByCategory[category.id]?.length) return;
       setCategoryEventLoading(category.id, true);
-      setCategoryError(category.id, "Odds not available via Odds API.");
+      setCategoryError(
+        category.id,
+        category.id === "baseball_mlb"
+          ? "Current MLB events are showing from ESPN, but the Odds API is not returning matching MLB lines yet — likely because these are spring-training/preseason games."
+          : "Odds not available via Odds API."
+      );
       try {
         const res = await fetch(
           `/api/sports/events?category=${category.id}&date=${safeSelectedDate.toISOString()}&tzOffset=${tzOffset}`,
@@ -386,7 +400,7 @@ export default function Home() {
       try {
         const oddsKeys = await getOddsKeysForCategory(category);
         if (!oddsKeys.length) {
-          setCategoryError(category.id, "Odds not available via Odds API.");
+          setCategoryError(category.id, category.id === "baseball_mlb" ? "MLB odds are not available from our Odds API source for the current spring-training style slate yet." : "Odds not available via Odds API.");
           return;
         }
         const games = await fetchOdds(oddsKeys);
@@ -394,7 +408,12 @@ export default function Home() {
           (a, b) => new Date(a.commence_time).getTime() - new Date(b.commence_time).getTime()
         );
         if (sorted.length === 0) {
-          setCategoryError(category.id, "Odds not available via Odds API.");
+          setCategoryError(
+            category.id,
+            category.id === "baseball_mlb"
+              ? "Current MLB events are showing from ESPN, but the Odds API is not returning matching MLB lines yet — likely because these are spring-training/preseason games."
+              : "Odds not available via Odds API."
+          );
           await loadCategoryEvents(category, false);
           setLoadedCategories((prev) => Array.from(new Set([...prev, category.id])));
           return;
@@ -847,9 +866,9 @@ export default function Home() {
                 </div>
               )}
               {visiblePredictionMarkets.map((market) => (
-                <PredictionMarketCard
+                <PredictionMarketComparisonTable
                   key={market.id}
-                  market={market}
+                  marketGroup={market}
                   categoryLabel={PREDICTION_CATEGORY_LABELS[predictionCategory]}
                 />
               ))}

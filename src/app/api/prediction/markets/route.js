@@ -10,6 +10,7 @@ const KALSHI_BASE_URL = "https://api.elections.kalshi.com/trade-api/v2";
 const MAX_LIMIT = 100;
 const MAX_FETCH = 200;
 const MAX_EVENT_LOOKUPS = 60;
+const SUPPORTED_SOURCES = new Set(["polymarket", "kalshi"]);
 const KALSHI_AUTH = {
   key:
     process.env.KALSHI_API_KEY ||
@@ -119,6 +120,7 @@ const mapKalshiCategory = ({ market = {}, event = {} } = {}) => {
     event?.category,
     event?.title,
     event?.subtitle,
+    event?.series_ticker,
     market?.title,
     market?.subtitle,
     market?.ticker,
@@ -128,6 +130,70 @@ const mapKalshiCategory = ({ market = {}, event = {} } = {}) => {
     .join(" ");
 
   return mapTextToCategory(combined);
+};
+
+const normalizeMarketTitle = (value = "") =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+const normalizeOutcomeName = (value = "") =>
+  String(value || "")
+    .trim()
+    .replace(/\s+/g, " ");
+
+const groupPredictionMarkets = (markets) => {
+  const groups = new Map();
+
+  for (const market of markets || []) {
+    const outcomes = Array.isArray(market?.outcomes) ? market.outcomes : [];
+    const titleKey = normalizeMarketTitle(market?.title);
+    const groupKey = `${market?.category || "other"}::${titleKey || market?.id}`;
+    const existing = groups.get(groupKey) || {
+      id: groupKey,
+      title: market?.title || "Prediction market",
+      category: market?.category || "other",
+      volume: 0,
+      endDate: market?.endDate || null,
+      outcomesMap: new Map(),
+      sourcesMap: new Map(),
+    };
+
+    existing.volume = Math.max(existing.volume || 0, Number(market?.volume || 0));
+    existing.endDate = existing.endDate || market?.endDate || null;
+    existing.sourcesMap.set(market.source, {
+      key: market.source,
+      label: market.source,
+      url: market.url || null,
+      marketId: market.id,
+    });
+
+    for (const outcome of outcomes) {
+      const name = normalizeOutcomeName(outcome?.name);
+      if (!name) continue;
+      const existingOutcome = existing.outcomesMap.get(name) || { name, prices: {} };
+      existingOutcome.prices[market.source] = {
+        price: Number(outcome?.price),
+        marketId: market.id,
+      };
+      existing.outcomesMap.set(name, existingOutcome);
+    }
+
+    groups.set(groupKey, existing);
+  }
+
+  return Array.from(groups.values())
+    .map((group) => ({
+      id: group.id,
+      title: group.title,
+      category: group.category,
+      volume: group.volume,
+      endDate: group.endDate,
+      sources: Array.from(group.sourcesMap.values()),
+      outcomes: Array.from(group.outcomesMap.values()),
+    }))
+    .sort((a, b) => (b.volume || 0) - (a.volume || 0));
 };
 
 const buildPolymarketMarkets = (markets, { category, search, limit }) => {
@@ -305,10 +371,11 @@ export async function GET(request) {
   const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 5), MAX_LIMIT) : 50;
   const search = searchParams.get("search") || "";
   const sourcesParam = searchParams.get("sources") || "polymarket,kalshi";
-  const sources = sourcesParam
+  const requestedSources = sourcesParam
     .split(",")
     .map((source) => source.trim().toLowerCase())
     .filter(Boolean);
+  const sources = requestedSources.filter((source) => SUPPORTED_SOURCES.has(source));
 
   const cacheKey = JSON.stringify({ category, limit, search, sources });
   const now = Date.now();
@@ -338,11 +405,17 @@ export async function GET(request) {
     }
   }
 
+  const sortedMarkets = results
+    .sort((a, b) => (b.volume || 0) - (a.volume || 0))
+    .slice(0, limit);
+
   const data = {
-    markets: results
-      .sort((a, b) => (b.volume || 0) - (a.volume || 0))
-      .slice(0, limit),
+    markets: sortedMarkets,
+    groupedMarkets: groupPredictionMarkets(sortedMarkets),
     errors,
+    requestedSources,
+    supportedSources: Array.from(SUPPORTED_SOURCES),
+    rejectedSources: requestedSources.filter((source) => !SUPPORTED_SOURCES.has(source)),
   };
 
   cache.set(cacheKey, { ts: now, data });

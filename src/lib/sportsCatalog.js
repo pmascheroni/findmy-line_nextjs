@@ -13,6 +13,14 @@ export const EXTRA_SPORTS = [
   { id: "olympics", name: "Olympics", icon: "🥇", espnPaths: ["olympics"], oddsGroup: "Olympics" },
   { id: "soccer_epl", name: "EPL", icon: "⚽", espnPaths: ["soccer/eng.1"], oddsKeys: ["soccer_epl"] },
   { id: "soccer_usa_mls", name: "MLS", icon: "⚽", espnPaths: ["soccer/usa.1"], oddsKeys: ["soccer_usa_mls"] },
+  {
+    id: "soccer_fifa_world_cup",
+    name: "World Cup",
+    icon: "🌍",
+    espnPaths: ["soccer/fifa.world"],
+    oddsKeys: ["soccer_fifa_world_cup"],
+    alwaysShow: true,
+  },
 ];
 
 export const ALL_CATEGORIES = [...TOP_SPORTS, ...EXTRA_SPORTS];
