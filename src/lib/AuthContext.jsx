@@ -15,6 +15,17 @@ import { auth } from "@/lib/firebaseClient";
 
 const AuthContext = createContext(null);
 
+function getAppOrigin() {
+  const envUrl = (process.env.NEXT_PUBLIC_APP_URL || "").trim();
+  const isLocalEnvUrl = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(envUrl);
+
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return window.location.origin;
+  }
+
+  return isLocalEnvUrl ? "" : envUrl;
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -65,10 +76,7 @@ export function AuthProvider({ children }) {
     }
 
     const trimmedEmail = email.trim();
-    const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "").trim();
-    const origin =
-      baseUrl ||
-      (typeof window !== "undefined" && window.location ? window.location.origin : "");
+    const origin = getAppOrigin();
     const redirectBase = origin ? origin.replace(/\/$/, "") : "";
     const actionCodeSettings = redirectBase
       ? { url: `${redirectBase}/sign-in`, handleCodeInApp: false }
