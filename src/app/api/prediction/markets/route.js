@@ -114,7 +114,21 @@ const mapPolymarketCategory = (market = {}) => {
   return mapTextToCategory(combined);
 };
 
-const mapKalshiCategory = (rawCategory = "") => mapTextToCategory(rawCategory);
+const mapKalshiCategory = ({ market = {}, event = {} } = {}) => {
+  const combined = [
+    event?.category,
+    event?.title,
+    event?.subtitle,
+    market?.title,
+    market?.subtitle,
+    market?.ticker,
+    market?.event_ticker,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return mapTextToCategory(combined);
+};
 
 const buildPolymarketMarkets = (markets, { category, search, limit }) => {
   const searchNormalized = normalizeText(search);
@@ -254,7 +268,7 @@ const fetchKalshi = async ({ category, search, limit }) => {
   const normalizedMarkets = filteredMarkets
     .map((market) => {
       const event = eventLookup[market.event_ticker];
-      const mappedCategory = mapKalshiCategory(event?.category);
+      const mappedCategory = mapKalshiCategory({ market, event });
       const yesPrice = getKalshiYesPrice(market);
       const outcomes = [];
       if (Number.isFinite(yesPrice)) {
