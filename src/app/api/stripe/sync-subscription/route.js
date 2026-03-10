@@ -7,6 +7,65 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
   apiVersion: "2024-04-10",
 });
 
+const ACTIVE_STATUSES = new Set(["active", "trialing"]);
+const STATUS_PRIORITY = {
+  active: 0,
+  trialing: 1,
+  past_due: 2,
+  unpaid: 3,
+  incomplete: 4,
+  incomplete_expired: 5,
+  paused: 6,
+  canceled: 7,
+};
+
+const getPlanFromPriceId = (priceId) =>
+  priceId === process.env.STRIPE_PRICE_PRO
+    ? "pro"
+    : priceId === process.env.STRIPE_PRICE_AMATEUR
+    ? "amateur"
+    : priceId === process.env.STRIPE_PRICE_ROOKIE
+    ? "rookie"
+    : undefined;
+
+async function getEffectiveSubscriptionForCustomer(customerId, preferredSubscriptionId = null) {
+  if (!customerId) return null;
+
+  const subscriptions = [];
+  let startingAfter = undefined;
+
+  while (subscriptions.length < 25) {
+    const list = await stripe.subscriptions.list({
+      customer: customerId,
+      status: "all",
+      limit: 10,
+      ...(startingAfter ? { starting_after: startingAfter } : {}),
+    });
+
+    subscriptions.push(...(list.data || []));
+    if (!list.has_more || !list.data?.length) break;
+    startingAfter = list.data[list.data.length - 1].id;
+  }
+
+  if (!subscriptions.length) return null;
+
+  const uniqueSubscriptions = Array.from(new Map(subscriptions.map((sub) => [sub.id, sub])).values());
+
+  uniqueSubscriptions.sort((a, b) => {
+    const aPreferred = preferredSubscriptionId && a.id === preferredSubscriptionId ? 1 : 0;
+    const bPreferred = preferredSubscriptionId && b.id === preferredSubscriptionId ? 1 : 0;
+    if (aPreferred !== bPreferred) return bPreferred - aPreferred;
+
+    const aPriority = STATUS_PRIORITY[a.status] ?? 99;
+    const bPriority = STATUS_PRIORITY[b.status] ?? 99;
+    if (aPriority !== bPriority) return aPriority - bPriority;
+
+    return (b.created || 0) - (a.created || 0);
+  });
+
+  return uniqueSubscriptions[0];
+}
+
 export async function POST(req) {
   try {
     if (!process.env.STRIPE_SECRET_KEY) {
@@ -31,40 +90,22 @@ export async function POST(req) {
 
     const stripeCustomerId =
       subscriptionData?.stripeCustomerId || subscriptionData?.stripe_customer_id || null;
-    let subscriptionId =
+    const subscriptionId =
       subscriptionData?.stripeSubscriptionId || subscriptionData?.stripe_subscription_id || null;
 
-    let subscription = null;
-    if (subscriptionId) {
-      subscription = await stripe.subscriptions.retrieve(subscriptionId);
-    } else if (stripeCustomerId) {
-      const list = await stripe.subscriptions.list({
-        customer: stripeCustomerId,
-        status: "all",
-        limit: 1,
-      });
-      subscription = list.data?.[0] || null;
-      subscriptionId = subscription?.id || null;
-    }
+    const subscription = await getEffectiveSubscriptionForCustomer(stripeCustomerId, subscriptionId);
 
     if (!subscription) {
       return NextResponse.json({ error: "No Stripe subscription found" }, { status: 404 });
     }
 
     const status = subscription.status || "inactive";
-    const isActive = status === "active" || status === "trialing";
+    const isActive = ACTIVE_STATUSES.has(status);
     const periodEnd = subscription.current_period_end
       ? Timestamp.fromMillis(subscription.current_period_end * 1000)
       : null;
     const priceId = subscription.items?.data?.[0]?.price?.id;
-    const plan =
-      priceId === process.env.STRIPE_PRICE_PRO
-        ? "pro"
-        : priceId === process.env.STRIPE_PRICE_AMATEUR
-        ? "amateur"
-        : priceId === process.env.STRIPE_PRICE_ROOKIE
-        ? "rookie"
-        : undefined;
+    const plan = getPlanFromPriceId(priceId);
     const existingPlan = subscriptionData?.subscriptionPlan || subscriptionData?.subscription_plan || null;
     const normalizedPlan = plan || existingPlan || null;
 
