@@ -14,7 +14,61 @@ export default function InjuriesWidget({ homeTeam, awayTeam, sportKey }) {
   const containerRef = useRef(null);
 
   useEffect(() => {
-    setLoading(false);
+    const homeTeamName = typeof homeTeam === 'string' ? homeTeam : homeTeam?.name;
+    const awayTeamName = typeof awayTeam === 'string' ? awayTeam : awayTeam?.name;
+
+    if (!sportKey || !homeTeamName || !awayTeamName) {
+      setInjuries({ 
+        home: { teamName: homeTeamName || 'Home', logo: homeTeam?.logo_url || homeTeam?.logoUrl || homeTeam?.logo || null, injuries: [] }, 
+        away: { teamName: awayTeamName || 'Away', logo: awayTeam?.logo_url || awayTeam?.logoUrl || awayTeam?.logo || null, injuries: [] } 
+      });
+      setLoading(false);
+      return;
+    }
+
+    let isCancelled = false;
+
+    const fetchInjuries = async () => {
+      try {
+        setLoading(true);
+        const params = new URLSearchParams({
+          sportKey,
+          homeTeam: homeTeamName,
+          awayTeam: awayTeamName,
+        });
+        const response = await fetch(`/api/espn/injuries?${params.toString()}`);
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data?.error || 'Failed to fetch injuries');
+        }
+
+        if (!isCancelled) {
+          setInjuries({
+            home: data?.home || { teamName: homeTeamName, logo: null, injuries: [] },
+            away: data?.away || { teamName: awayTeamName, logo: null, injuries: [] },
+          });
+        }
+      } catch (error) {
+        console.error('Error loading injury report:', error);
+        if (!isCancelled) {
+          setInjuries({ 
+            home: { teamName: homeTeamName, logo: homeTeam?.logo_url || homeTeam?.logoUrl || homeTeam?.logo || null, injuries: [] }, 
+            away: { teamName: awayTeamName, logo: awayTeam?.logo_url || awayTeam?.logoUrl || awayTeam?.logo || null, injuries: [] } 
+          });
+        }
+      } finally {
+        if (!isCancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchInjuries();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [homeTeam, awayTeam, sportKey]);
 
   // Auto-minimize after 16 seconds of inactivity
