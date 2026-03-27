@@ -13,6 +13,7 @@ import MarketSection from "@/components/game/MarketSection";
 import LineHistoryChart from "@/components/game/LineHistoryChart";
 import BetCalculator from "@/components/game/BetCalculator";
 import InjuriesWidget from "@/components/game/InjuriesWidget";
+import TrueOddsWidget from "@/components/game/TrueOddsWidget";
 import GameInfoBar from "@/components/game/GameInfoBar";
 import { useTeamData } from "@/components/game/useTeamData";
 import TeamLogo from "@/components/game/TeamLogo";
@@ -85,6 +86,8 @@ export default function GameDetail() {
   const [liveScore, setLiveScore] = useState(null);
   const [propsLoading, setPropsLoading] = useState(false);
   const [propsError, setPropsError] = useState(null);
+  const [historyPoints, setHistoryPoints] = useState([]);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const propsLoadedRef = useRef(false);
   const [hasHydrated, setHasHydrated] = useState(false);
   const { getTeam, teams } = useTeamData();
@@ -106,6 +109,30 @@ export default function GameDetail() {
   useEffect(() => {
     setHasHydrated(true);
   }, []);
+
+  // Lazy-load line history when user switches to history tab
+  useEffect(() => {
+    if (activeTab !== "history" || historyLoaded || !game || !sportKey) return;
+    const loadHistory = async () => {
+      try {
+        const params = new URLSearchParams();
+        params.set("sport", sportKey);
+        params.set("eventId", game.id);
+        params.set("market", "h2h");
+        params.set("bookmakers", selectedSportsbooks.join(","));
+        const res = await fetch(`/api/odds/history?${params.toString()}`, { cache: "no-store" });
+        const data = await res.json().catch(() => ({}));
+        if (data.points?.length) {
+          setHistoryPoints(data.points);
+        }
+      } catch {
+        // fail silently — LineHistoryChart handles empty state gracefully
+      } finally {
+        setHistoryLoaded(true);
+      }
+    };
+    loadHistory();
+  }, [activeTab, historyLoaded, game, sportKey, selectedSportsbooks]);
 
   const generateGameDetails = (existingGame) => {
     const BOOKMAKERS = ["draftkings", "fanduel", "betmgm", "williamhill_us", "espnbet"];
@@ -802,6 +829,9 @@ export default function GameDetail() {
         sportKey={game.sport_key}
       />
 
+      {/* True Odds Calculator */}
+      <TrueOddsWidget game={game} />
+
       {/* Bet Calculator */}
       <div data-tour="bet-calculator">
         <BetCalculator />
@@ -946,7 +976,7 @@ export default function GameDetail() {
             </div>
 
             <div data-tour="line-history">
-              <LineHistoryChart game={game} />
+              <LineHistoryChart game={game} historicalData={historyPoints} />
             </div>
           </motion.div>
         </TabsContent>
