@@ -55,6 +55,8 @@ export default function GameCard({ game, index }) {
   const timezone = userLocation?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
   const timeLabel = hasHydrated ? formatTimeInTimezone(gameTime, timezone) : "—";
 
+  const isOutright = !game.home_team && !game.away_team;
+
   useEffect(() => {
     setHasHydrated(true);
   }, []);
@@ -296,6 +298,85 @@ export default function GameCard({ game, index }) {
     router.push(`/game/${game.id}?sport=${game.sport_key}`);
   };
 
+  // Outright rendering (golf, etc.)
+  if (isOutright) {
+    // Get outcomes from first bookmaker's outrights market
+    const outrightOutcomes = [];
+    if (game.bookmakers?.length > 0) {
+      const firstBook = game.bookmakers[0];
+      const outrightMarket = firstBook.markets?.find(m => m.key === 'outrights');
+      if (outrightMarket?.outcomes) {
+        // Sort by price (best/lowest negative or highest positive first)
+        const sorted = [...outrightMarket.outcomes].sort((a, b) => {
+          // Both positive: lower is better (+200 < +300)
+          if (a.price > 0 && b.price > 0) return a.price - b.price;
+          // Both negative: higher is better (-150 > -200)
+          if (a.price < 0 && b.price < 0) return b.price - a.price;
+          // Mixed: positive is better than negative
+          if (a.price > 0 && b.price < 0) return -1;
+          if (a.price < 0 && b.price > 0) return 1;
+          return 0;
+        });
+        outrightOutcomes.push(...sorted.slice(0, 6));
+      }
+    }
+
+    const formatOutrightOdds = (price) => {
+      if (price > 0) return `+${price}`;
+      return `${price}`;
+    };
+
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: index * 0.03 }}
+      >
+        <div
+          onClick={handleClick}
+          className="block group cursor-pointer"
+          data-game-id={game.id}
+          data-sport-key={game.sport_key}
+        >
+          <div className={`relative bg-gradient-to-br from-slate-900 to-slate-900/50 rounded-xl border overflow-hidden hover:border-blue-500/50 hover:bg-slate-800/30 transition-all duration-200 border-slate-800/50`}>
+            <div className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex-1 min-w-0">
+                  <div className="mb-2">
+                    <h3 className="font-semibold text-white text-sm truncate">{game.sport_title}</h3>
+                    <div className="flex items-center gap-1.5 text-slate-400 text-xs">
+                      <Clock className="w-3 h-3" />
+                      {timeLabel}
+                    </div>
+                  </div>
+                  {outrightOutcomes.length > 0 ? (
+                    <div className="space-y-1.5">
+                      {outrightOutcomes.map((outcome, idx) => (
+                        <div key={idx} className="flex items-center justify-between">
+                          <span className="text-slate-300 text-xs truncate">{outcome.name}</span>
+                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${outcome.price > 0 ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'}`}>
+                            {formatOutrightOdds(outcome.price)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-slate-500 text-sm">No outright odds available</div>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 text-slate-500 group-hover:text-blue-400 transition-colors flex-shrink-0">
+                  <span className="text-sm hidden sm:inline">View Odds</span>
+                  <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
+
+  // Regular team vs team game rendering
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}

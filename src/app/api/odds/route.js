@@ -154,7 +154,8 @@ export async function GET(request) {
         const url = new URL(`${baseUrl}/sports/${sport}/odds`);
         url.searchParams.set("apiKey", apiKey);
         url.searchParams.set("regions", regions);
-        url.searchParams.set("markets", markets);
+        const sportMarkets = sport.endsWith('_winner') ? 'outrights' : markets;
+        url.searchParams.set("markets", sportMarkets);
         url.searchParams.set("oddsFormat", oddsFormat);
         url.searchParams.set("dateFormat", dateFormat);
         if (bookmakers) {

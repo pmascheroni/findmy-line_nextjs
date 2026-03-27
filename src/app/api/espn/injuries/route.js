@@ -1,12 +1,22 @@
 import { NextResponse } from "next/server";
 
 const SPORT_CONFIG = {
+  // existing
   americanfootball_nfl: { scoreboardPath: "football/nfl", league: "football/leagues/nfl" },
   americanfootball_ncaaf: { scoreboardPath: "football/college-football", league: "football/leagues/college-football" },
   basketball_nba: { scoreboardPath: "basketball/nba", league: "basketball/leagues/nba" },
   basketball_ncaab: { scoreboardPath: "basketball/mens-college-basketball", league: "basketball/leagues/mens-college-basketball" },
   baseball_mlb: { scoreboardPath: "baseball/mlb", league: "baseball/leagues/mlb" },
   icehockey_nhl: { scoreboardPath: "hockey/nhl", league: "hockey/leagues/nhl" },
+  // new additions
+  mma_mixed_martial_arts: { scoreboardPath: "mma/ufc", league: "mma/leagues/ufc" },
+  soccer_epl: { scoreboardPath: "soccer/eng.1", league: "soccer/leagues/eng.1" },
+  soccer_usa_mls: { scoreboardPath: "soccer/usa.1", league: "soccer/leagues/usa.1" },
+  soccer_germany_bundesliga: { scoreboardPath: "soccer/ger.1", league: "soccer/leagues/ger.1" },
+  soccer_spain_la_liga: { scoreboardPath: "soccer/esp.1", league: "soccer/leagues/esp.1" },
+  soccer_italy_serie_a: { scoreboardPath: "soccer/ita.1", league: "soccer/leagues/ita.1" },
+  soccer_france_ligue_one: { scoreboardPath: "soccer/fra.1", league: "soccer/leagues/fra.1" },
+  soccer_uefa_champs_league: { scoreboardPath: "soccer/uefa.champions", league: "soccer/leagues/uefa.champions" },
 };
 
 const getTeamWords = (name = "") =>
