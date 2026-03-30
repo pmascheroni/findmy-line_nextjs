@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { createPageUrl } from "@/utils";
@@ -14,6 +14,7 @@ import LineHistoryChart from "@/components/game/LineHistoryChart";
 import BetCalculator from "@/components/game/BetCalculator";
 import InjuriesWidget from "@/components/game/InjuriesWidget";
 import TrueOddsWidget from "@/components/game/TrueOddsWidget";
+import PropBetsSection from "@/components/game/PropBetsSection";
 import GameInfoBar from "@/components/game/GameInfoBar";
 import { useTeamData } from "@/components/game/useTeamData";
 import TeamLogo from "@/components/game/TeamLogo";
@@ -95,6 +96,8 @@ export default function GameDetail() {
   const { isMarketsMode, selectedSportsbooks } = useSettings();
   const { completeTour, neverShowTour } = useOnboarding();
   const sportsbooksKey = selectedSportsbooks.join(",");
+  
+  const [selectedBet, setSelectedBet] = useState(null);
   
   // Check tour state ONCE on mount, not on every render
   const [showTour, setShowTour] = useState(() => {

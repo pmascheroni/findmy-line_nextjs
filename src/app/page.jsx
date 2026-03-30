@@ -16,6 +16,7 @@ import OnboardingTour from "@/components/onboarding/OnboardingTour";
 import { useOnboarding } from "@/components/onboarding/useOnboarding";
 import SettingsModal from "@/components/settings/SettingsModal";
 import { TOP_SPORTS, EXTRA_SPORTS, ALL_CATEGORIES, TOP_IDS } from "@/lib/sportsCatalog";
+import { isSportInSeason, SEASONAL_CALENDAR } from "@/lib/seasonalCalendar";
 import PredictionMarketComparisonTable from "@/components/prediction/PredictionMarketComparisonTable";
 
 const BOOKMAKERS = "draftkings,fanduel,betmgm,williamhill_us,espnbet";
@@ -232,9 +233,14 @@ export default function Home() {
   }, [predictionCategory]);
 
   const availableTopSports = useMemo(() => {
-    if (!summaryLoaded) return [];
-    return TOP_SPORTS.filter((sport) => (summary[sport.id] || 0) > 0);
-  }, [summary, summaryLoaded]);
+    // Always show all in-season sports, highlight those with games today
+    try {
+      return TOP_SPORTS.filter((sport) => isSportInSeason(sport.id, safeSelectedDate));
+    } catch (error) {
+      console.error("Error filtering top sports:", error);
+      return TOP_SPORTS; // Fallback to all sports
+    }
+  }, [safeSelectedDate]);
 
   const isSportVisibleForDate = useCallback((sport) => {
     if (!sport?.visibilityWindow) return false;
@@ -252,14 +258,33 @@ export default function Home() {
   }, [safeSelectedDate]);
 
   const availableExtraSports = useMemo(() => {
-    if (!summaryLoaded) return [];
-    return EXTRA_SPORTS.filter((sport) => isSportVisibleForDate(sport) || (summary[sport.id] || 0) > 0);
-  }, [summary, summaryLoaded, isSportVisibleForDate]);
+    // Always show all in-season sports from EXTRA_SPORTS
+    try {
+      return EXTRA_SPORTS.filter((sport) => isSportInSeason(sport.id, safeSelectedDate));
+    } catch (error) {
+      console.error("Error filtering extra sports:", error);
+      return EXTRA_SPORTS; // Fallback to all sports
+    }
+  }, [safeSelectedDate]);
 
   const navSports = useMemo(() => {
     const base = [{ id: "all", name: "All", icon: "🏆" }];
     return base.concat([...availableTopSports, ...availableExtraSports]);
   }, [availableTopSports, availableExtraSports]);
+
+  // Sports that have games today (based on summary counts)
+  const sportsWithGamesToday = useMemo(() => {
+    if (!summaryLoaded) return [];
+    return [...availableTopSports, ...availableExtraSports].filter(sport => (summary[sport.id] || 0) > 0);
+  }, [summary, summaryLoaded, availableTopSports, availableExtraSports]);
+
+  const handleSportWithoutGamesClick = useCallback((sport) => {
+    // For now, we'll just select the sport and show a message
+    // In future, we could auto-navigate to next date with games
+    setSelectedSport(sport.id);
+    // Show a toast or message that there are no games today for this sport
+    console.log(`No games today for ${sport.name}. Would navigate to next available date.`);
+  }, []);
 
   const visiblePredictionMarkets = useMemo(() => {
     if (predictionExpanded) return predictionMarkets;
@@ -768,6 +793,8 @@ export default function Home() {
                 sports={navSports}
                 selectedSport={selectedSport}
                 onSelectSport={setSelectedSport}
+                sportsWithGamesToday={sportsWithGamesToday.map(s => s.id)}
+                onSportWithoutGamesClick={handleSportWithoutGamesClick}
               />
             </div>
             <div className="flex items-center gap-2" data-tour="date-picker">
