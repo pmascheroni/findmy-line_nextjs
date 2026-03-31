@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { format, isToday, isSameDay } from "date-fns";
 import { Loader2, AlertCircle, RefreshCw, Trophy, ChevronDown, ChevronRight, HelpCircle, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,7 @@ import { motion } from "framer-motion";
 import SportFilter from "@/components/odds/SportFilter";
 import DatePicker from "@/components/odds/DatePicker";
 import GameCard from "@/components/odds/GameCard";
+import MultiDaySportFeed from "@/components/odds/MultiDaySportFeed";
 import { useSubscription } from "@/components/subscription/SubscriptionContext";
 import UpgradeBanner from "@/components/subscription/UpgradeBanner";
 import { useSettings } from "@/components/settings/SettingsContext";
@@ -16,7 +18,62 @@ import OnboardingTour from "@/components/onboarding/OnboardingTour";
 import { useOnboarding } from "@/components/onboarding/useOnboarding";
 import SettingsModal from "@/components/settings/SettingsModal";
 import { TOP_SPORTS, EXTRA_SPORTS, ALL_CATEGORIES, TOP_IDS } from "@/lib/sportsCatalog";
+import { isSportInSeason, SEASONAL_CALENDAR } from "@/lib/seasonalCalendar";
 import PredictionMarketComparisonTable from "@/components/prediction/PredictionMarketComparisonTable";
+
+/**
+ * Clickable event row for ESPN events without sportsbook odds yet.
+ * Navigates to /game/[id] with the event stored in sessionStorage.
+ */
+function EventRow({ event, categoryId }) {
+  const router = useRouter();
+  if (!event) return null;
+
+  const handleClick = () => {
+    if (!event.id) return;
+    const syntheticGame = {
+      id: event.id,
+      sport_key: categoryId,
+      sport_title: event.name || "Event",
+      commence_time: event.date || new Date().toISOString(),
+      home_team: event.homeTeam || "Home",
+      away_team: event.awayTeam || "Away",
+      venue: event.venue || "",
+      bookmakers: [],
+      _espnMeta: {
+        homeAbbrev: event.homeAbbrev,
+        awayAbbrev: event.awayAbbrev,
+        homeLogo: event.homeLogo,
+        awayLogo: event.awayLogo,
+        status: event.status,
+      },
+    };
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem(`game_${event.id}`, JSON.stringify(syntheticGame));
+    }
+    router.push(`/game/${event.id}?sport=${categoryId}`);
+  };
+
+  return (
+    <button
+      onClick={handleClick}
+      className="w-full text-left rounded-xl border border-slate-800/60 bg-slate-900/40 px-4 py-3 hover:bg-slate-900/60 hover:border-slate-700/60 transition-all duration-200"
+    >
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="text-sm text-white font-medium">{event.name}</div>
+          {event.shortName && event.shortName !== event.name && (
+            <div className="text-xs text-slate-400">{event.shortName}</div>
+          )}
+        </div>
+        <div className="text-xs text-slate-500">{event.status || "Scheduled"}</div>
+      </div>
+      <div className="mt-3 rounded-lg border border-slate-800/60 bg-slate-950/50 px-3 py-2 text-xs text-slate-500">
+        Odds Coming Soon — not yet available from sportsbooks.
+      </div>
+    </button>
+  );
+}
 
 const BOOKMAKERS = "draftkings,fanduel,betmgm,williamhill_us,espnbet";
 const MAX_GAMES_PER_CATEGORY = 10;
@@ -61,6 +118,7 @@ export default function Home() {
   });
   const [gamesByCategory, setGamesByCategory] = useState({});
   const [eventsByCategory, setEventsByCategory] = useState({});
+  const [noGamesBanner, setNoGamesBanner] = useState(null); // { sportName, nextDate }
   const [loading, setLoading] = useState(false);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summary, setSummary] = useState({});
@@ -82,6 +140,9 @@ export default function Home() {
   const [mounted, setMounted] = useState(false);
   const [tourInitialized, setTourInitialized] = useState(false);
   const [tzOffset, setTzOffset] = useState(0);
+  const [multiDayData, setMultiDayData] = useState(null); // { categoryId, days: [...] }
+  const [multiDayLoading, setMultiDayLoading] = useState(false);
+  const [multiDayError, setMultiDayError] = useState(null);
   const oddsGroupCache = useRef({});
   const summaryLoaded = summary && Object.keys(summary).length > 0;
   const summaryLoadedRef = useRef(false);
@@ -201,6 +262,8 @@ export default function Home() {
     setExpandedCategories([]);
     setErrorsByCategory({});
     setApiError(null);
+    setMultiDayData(null);
+    setMultiDayError(null);
   }, [safeSelectedDate, isMarketsMode, selectedPredictionMarkets, selectedSportsbooks]);
 
   useEffect(() => {
@@ -232,9 +295,14 @@ export default function Home() {
   }, [predictionCategory]);
 
   const availableTopSports = useMemo(() => {
-    if (!summaryLoaded) return [];
-    return TOP_SPORTS.filter((sport) => (summary[sport.id] || 0) > 0);
-  }, [summary, summaryLoaded]);
+    // Always show all in-season sports, highlight those with games today
+    try {
+      return TOP_SPORTS.filter((sport) => isSportInSeason(sport.id, safeSelectedDate));
+    } catch (error) {
+      console.error("Error filtering top sports:", error);
+      return TOP_SPORTS; // Fallback to all sports
+    }
+  }, [safeSelectedDate]);
 
   const isSportVisibleForDate = useCallback((sport) => {
     if (!sport?.visibilityWindow) return false;
@@ -252,14 +320,61 @@ export default function Home() {
   }, [safeSelectedDate]);
 
   const availableExtraSports = useMemo(() => {
-    if (!summaryLoaded) return [];
-    return EXTRA_SPORTS.filter((sport) => isSportVisibleForDate(sport) || (summary[sport.id] || 0) > 0);
-  }, [summary, summaryLoaded, isSportVisibleForDate]);
+    // Always show all in-season sports from EXTRA_SPORTS
+    try {
+      return EXTRA_SPORTS.filter((sport) => isSportInSeason(sport.id, safeSelectedDate));
+    } catch (error) {
+      console.error("Error filtering extra sports:", error);
+      return EXTRA_SPORTS; // Fallback to all sports
+    }
+  }, [safeSelectedDate]);
 
   const navSports = useMemo(() => {
     const base = [{ id: "all", name: "All", icon: "🏆" }];
     return base.concat([...availableTopSports, ...availableExtraSports]);
   }, [availableTopSports, availableExtraSports]);
+
+  // Sports that have games today (based on summary counts)
+  const sportsWithGamesToday = useMemo(() => {
+    if (!summaryLoaded) return [];
+    return [...availableTopSports, ...availableExtraSports].filter(sport => (summary[sport.id] || 0) > 0);
+  }, [summary, summaryLoaded, availableTopSports, availableExtraSports]);
+
+  const handleSportWithoutGamesClick = useCallback(async (sport) => {
+    // Select the sport immediately so the user sees the correct filter
+    setSelectedSport(sport.id);
+    // Show "no games today" banner right away
+    setNoGamesBanner({ sportName: sport.name, nextDate: null, searching: true });
+
+    // Search up to 14 days ahead for the next date with events
+    try {
+      const tzOffset = -(new Date().getTimezoneOffset());
+      let found = null;
+      for (let i = 1; i <= 14; i++) {
+        const candidate = new Date(safeSelectedDate);
+        candidate.setDate(candidate.getDate() + i);
+        const res = await fetch(
+          `/api/sports/summary?date=${candidate.toISOString()}&tzOffset=${tzOffset}`
+        );
+        if (!res.ok) continue;
+        const data = await res.json();
+        const count = data?.counts?.[sport.id] ?? 0;
+        if (count > 0) {
+          found = candidate;
+          break;
+        }
+      }
+      if (found) {
+        setNoGamesBanner({ sportName: sport.name, nextDate: found, searching: false });
+        // Auto-navigate to that date
+        setSelectedDate(found);
+      } else {
+        setNoGamesBanner({ sportName: sport.name, nextDate: null, searching: false });
+      }
+    } catch {
+      setNoGamesBanner({ sportName: sport.name, nextDate: null, searching: false });
+    }
+  }, [safeSelectedDate]);
 
   const visiblePredictionMarkets = useMemo(() => {
     if (predictionExpanded) return predictionMarkets;
@@ -445,6 +560,77 @@ export default function Home() {
     [fetchOdds, getOddsKeysForCategory, loadedCategories, loadCategoryEvents]
   );
 
+  const fetchMultiDayFeed = useCallback(
+    async (category, startEspnDate = null) => {
+      if (!category || !category.espnPaths || category.espnPaths.length === 0) {
+        return null;
+      }
+      const params = new URLSearchParams();
+      params.set("category", category.id);
+      params.set("tzOffset", String(tzOffset));
+      params.set("days", "14"); // fetch 14 days initially for sparse sports
+      if (startEspnDate) {
+        // Convert YYYYMMDD to ISO
+        const y = startEspnDate.slice(0, 4);
+        const m = startEspnDate.slice(4, 6);
+        const d = startEspnDate.slice(6, 8);
+        params.set("startDate", `${y}-${m}-${d}T12:00:00Z`);
+      } else {
+        params.set("startDate", new Date().toISOString());
+      }
+      const res = await fetch(`/api/sports/multi-day?${params.toString()}`, { cache: "no-store" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to fetch multi-day feed");
+      return data;
+    },
+    [tzOffset]
+  );
+
+  const handleMultiDayLoadMore = useCallback(
+    async (lastEspnDate) => {
+      if (!lastEspnDate) return { days: [] };
+      const category = ALL_CATEGORIES.find((sport) => sport.id === selectedSport);
+      if (!category) return { days: [] };
+      // next start date = lastEspnDate + 1
+      const y = parseInt(lastEspnDate.slice(0, 4), 10);
+      const mo = parseInt(lastEspnDate.slice(4, 6), 10) - 1;
+      const dy = parseInt(lastEspnDate.slice(6, 8), 10);
+      const nextDate = new Date(Date.UTC(y, mo, dy + 1));
+      // Fetch the next 14 days from nextDate
+      const params = new URLSearchParams();
+      params.set("category", category.id);
+      params.set("tzOffset", String(tzOffset));
+      params.set("days", "14");
+      params.set("startDate", nextDate.toISOString());
+      const res = await fetch(`/api/sports/multi-day?${params.toString()}`, { cache: "no-store" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return { days: [] };
+      return data;
+    },
+    [selectedSport, tzOffset]
+  );
+
+  // Load multi-day feed when a specific sport is selected
+  useEffect(() => {
+    if (!showSportsView) return;
+    if (selectedSport === "all") return;
+    const category = ALL_CATEGORIES.find((sport) => sport.id === selectedSport);
+    if (!category || !category.espnPaths || category.espnPaths.length === 0) return;
+    setMultiDayData(null);
+    setMultiDayError(null);
+    setMultiDayLoading(true);
+    fetchMultiDayFeed(category)
+      .then((data) => {
+        setMultiDayData(data);
+      })
+      .catch((err) => {
+        setMultiDayError(err?.message || "Failed to load multi-day feed");
+      })
+      .finally(() => {
+        setMultiDayLoading(false);
+      });
+  }, [showSportsView, selectedSport, fetchMultiDayFeed]);
+
   useEffect(() => {
     if (!showSportsView) return;
     if (selectedSport !== "all") return;
@@ -570,27 +756,10 @@ export default function Home() {
     return items;
   };
 
-  const renderEventRow = (event) => {
+  // renderEventRow delegates to the EventRow component defined above
+  const renderEventRow = (event, categoryId) => {
     if (!event) return null;
-    return (
-      <div
-        key={event.id}
-        className="rounded-xl border border-slate-800/60 bg-slate-900/40 px-4 py-3"
-      >
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="text-sm text-white font-medium">{event.name}</div>
-            {event.shortName && event.shortName !== event.name && (
-              <div className="text-xs text-slate-400">{event.shortName}</div>
-            )}
-          </div>
-          <div className="text-xs text-slate-500">{event.status || "Scheduled"}</div>
-        </div>
-        <div className="mt-3 rounded-lg border border-slate-800/60 bg-slate-950/50 px-3 py-2 text-xs text-slate-400">
-          Odds unavailable for this event from the current odds providers.
-        </div>
-      </div>
-    );
+    return <EventRow key={event.id} event={event} categoryId={categoryId} />;
   };
 
   const renderCategorySection = (category, games = []) => {
@@ -633,7 +802,7 @@ export default function Home() {
               item.type === "game" && item.game ? (
                 <GameCard key={item.game.id} game={item.game} index={index} />
               ) : (
-                renderEventRow(item.event)
+                renderEventRow(item.event, category.id)
               )
             )}
             {showMore && (
@@ -767,11 +936,14 @@ export default function Home() {
               <SportFilter
                 sports={navSports}
                 selectedSport={selectedSport}
-                onSelectSport={setSelectedSport}
+                onSelectSport={(id) => { setSelectedSport(id); setNoGamesBanner(null); setMultiDayData(null); }}
+                sportsWithGamesToday={sportsWithGamesToday.map(s => s.id)}
+                onSportWithoutGamesClick={handleSportWithoutGamesClick}
               />
             </div>
+            {/* Always show date picker so users can jump to any date */}
             <div className="flex items-center gap-2" data-tour="date-picker">
-              <DatePicker selectedDate={safeSelectedDate} onDateChange={setSelectedDate} />
+              <DatePicker selectedDate={safeSelectedDate} onDateChange={(d) => { setSelectedDate(d); setNoGamesBanner(null); setMultiDayData(null); }} />
             </div>
           </div>
         ) : (
@@ -809,16 +981,39 @@ export default function Home() {
             </motion.div>
           )}
 
-          {loading && !summaryLoading ? (
+          {noGamesBanner && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-300 text-sm"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span>📅</span>
+                  {noGamesBanner.searching ? (
+                    <span>No <strong>{noGamesBanner.sportName}</strong> games today — searching for next available date…</span>
+                  ) : noGamesBanner.nextDate ? (
+                    <span>No <strong>{noGamesBanner.sportName}</strong> games today — showing next available: <strong>{format(noGamesBanner.nextDate, "MMMM d")}</strong></span>
+                  ) : (
+                    <span>No <strong>{noGamesBanner.sportName}</strong> games scheduled in the next 2 weeks.</span>
+                  )}
+                </div>
+                <button
+                  onClick={() => setNoGamesBanner(null)}
+                  className="text-blue-400 hover:text-white ml-2 shrink-0"
+                  aria-label="Dismiss"
+                >✕</button>
+              </div>
+            </motion.div>
+          )}
+
+          {loading && !summaryLoading && selectedSport === "all" ? (
             <div className="flex items-center justify-center py-20">
               <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
             </div>
           ) : selectedSport !== "all" ? (
             (() => {
               const category = ALL_CATEGORIES.find((sport) => sport.id === selectedSport);
-              const games = category ? gamesByCategory[category.id] || [] : [];
-              const events = category ? eventsByCategory[category.id] || [] : [];
-              const errorMessage = category ? errorsByCategory[category.id] : null;
               if (!category) {
                 return (
                   <div className="flex items-center justify-center py-20 text-slate-400">
@@ -827,33 +1022,67 @@ export default function Home() {
                   </div>
                 );
               }
-              if (loadingCategories[category.id] || loadingEvents[category.id]) {
+
+              // For outright/futures sports (no espnPaths), use the old single-day view
+              const isOutrightSport = !category.espnPaths || category.espnPaths.length === 0;
+              if (isOutrightSport) {
+                const games = gamesByCategory[category.id] || [];
+                const events = eventsByCategory[category.id] || [];
+                const errorMessage = errorsByCategory[category.id];
+                if (loadingCategories[category.id] || loadingEvents[category.id]) {
+                  return (
+                    <div className="flex items-center justify-center py-20">
+                      <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+                    </div>
+                  );
+                }
+                if (games.length === 0 && events.length > 0) {
+                  return <div className="space-y-4">{renderCategorySection(category, games)}</div>;
+                }
+                if (errorMessage) {
+                  return (
+                    <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+                      <Trophy className="w-12 h-12 mb-3 text-slate-500" />
+                      <p>{errorMessage}</p>
+                    </div>
+                  );
+                }
+                if (games.length === 0) {
+                  return (
+                    <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+                      <Trophy className="w-12 h-12 mb-3 text-slate-500" />
+                      <p>No games found for this date.</p>
+                    </div>
+                  );
+                }
+                return <div className="space-y-4">{renderCategorySection(category, games)}</div>;
+              }
+
+              // Multi-day feed for sports with ESPN data
+              if (multiDayLoading) {
                 return (
                   <div className="flex items-center justify-center py-20">
                     <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
                   </div>
                 );
               }
-              if (games.length === 0 && events.length > 0) {
-                return <div className="space-y-4">{renderCategorySection(category, games)}</div>;
-              }
-              if (errorMessage) {
+              if (multiDayError) {
                 return (
                   <div className="flex flex-col items-center justify-center py-20 text-slate-400">
                     <Trophy className="w-12 h-12 mb-3 text-slate-500" />
-                    <p>{errorMessage}</p>
+                    <p>{multiDayError}</p>
                   </div>
                 );
               }
-              if (games.length === 0) {
-                return (
-                  <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-                    <Trophy className="w-12 h-12 mb-3 text-slate-500" />
-                    <p>No games found for this date.</p>
-                  </div>
-                );
-              }
-              return <div className="space-y-4">{renderCategorySection(category, games)}</div>;
+              const oddsGames = gamesByCategory[category.id] || [];
+              return (
+                <MultiDaySportFeed
+                  category={category}
+                  initialDays={multiDayData?.days || []}
+                  oddsGames={oddsGames}
+                  onLoadMore={handleMultiDayLoadMore}
+                />
+              );
             })()
           ) : (
             <div className="space-y-4">

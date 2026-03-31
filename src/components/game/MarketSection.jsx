@@ -7,7 +7,7 @@ import { useBetSlip } from "./BetSlipContext";
 import { useSettings, ALL_PREDICTION_MARKETS } from "../settings/SettingsContext";
 import { useSubscription } from "../subscription/SubscriptionContext";
 
-export default function MarketSection({ title, marketKey, game, icon }) {
+export default function MarketSection({ title, marketKey, game, icon, onBetSelect, selectedBet }) {
   const [expanded, setExpanded] = useState(true);
   const { addBet, isBetSelected } = useBetSlip();
   const { getSportsbooks, isMarketsMode, selectedPredictionMarkets } = useSettings();

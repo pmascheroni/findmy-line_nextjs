@@ -18,7 +18,8 @@ export const EXTRA_SPORTS = [
   { id: "soccer_france_ligue_one", name: "Ligue 1", icon: "⚽", espnPaths: ["soccer/fra.1"], oddsKeys: ["soccer_france_ligue_one"] },
   { id: "soccer_uefa_champs_league", name: "Champions League", icon: "⚽", espnPaths: ["soccer/uefa.champions"], oddsKeys: ["soccer_uefa_champs_league"] },
   { id: "soccer_conmebol_copa_libertadores", name: "Copa Libertadores", icon: "⚽", espnPaths: ["soccer/conmebol.libertadores"], oddsKeys: ["soccer_conmebol_copa_libertadores"] },
-  { id: "soccer_fifa_world_cup", name: "World Cup", icon: "🌍", espnPaths: ["soccer/fifa.world"], oddsKeys: ["soccer_fifa_world_cup"], visibilityWindow: { start: "2026-06-04", end: "2026-07-19" } },
+  // World Cup 2026: show from March 2026 onward so fans can see the bracket/schedule (odds will say "Coming Soon" until books open)
+  { id: "soccer_fifa_world_cup", name: "World Cup", icon: "🌍", espnPaths: ["soccer/fifa.world"], oddsKeys: ["soccer_fifa_world_cup"], visibilityWindow: { start: "2026-03-01", end: "2026-07-19" } },
   // Golf (outright/futures only — home_team/away_team are null in API response)
   { id: "golf_masters_tournament_winner", name: "Masters", icon: "⛳", espnPaths: [], oddsKeys: ["golf_masters_tournament_winner"], isOutright: true },
   { id: "golf_pga_championship_winner", name: "PGA Championship", icon: "⛳", espnPaths: [], oddsKeys: ["golf_pga_championship_winner"], isOutright: true },
@@ -35,8 +36,7 @@ export const EXTRA_SPORTS = [
   { id: "cricket_ipl", name: "IPL Cricket", icon: "🏏", espnPaths: [], oddsKeys: ["cricket_ipl"] },
   // Aussie Rules
   { id: "aussierules_afl", name: "AFL", icon: "🏈", espnPaths: [], oddsKeys: ["aussierules_afl"] },
-  // Olympics (visibility window)
-  { id: "olympics", name: "Olympics", icon: "🥇", espnPaths: ["olympics"], oddsGroup: "Olympics" },
+  // Olympics removed — 2024 Paris Olympics are over; re-add for 2028 LA Olympics when the time comes
 ];
 
 export const ALL_CATEGORIES = [...TOP_SPORTS, ...EXTRA_SPORTS];

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { createPageUrl } from "@/utils";
@@ -14,6 +14,8 @@ import LineHistoryChart from "@/components/game/LineHistoryChart";
 import BetCalculator from "@/components/game/BetCalculator";
 import InjuriesWidget from "@/components/game/InjuriesWidget";
 import TrueOddsWidget from "@/components/game/TrueOddsWidget";
+import GameStatsWidget from "@/components/game/GameStatsWidget";
+import PropBetsSection from "@/components/game/PropBetsSection";
 import GameInfoBar from "@/components/game/GameInfoBar";
 import { useTeamData } from "@/components/game/useTeamData";
 import TeamLogo from "@/components/game/TeamLogo";
@@ -28,7 +30,7 @@ const PROP_MARKETS_BY_SPORT = {
     { key: "player_pass_yds", title: "Passing Yards", icon: "🏈" },
     { key: "player_pass_tds", title: "Passing TDs", icon: "🎯" },
     { key: "player_rush_yds", title: "Rushing Yards", icon: "💨" },
-    { key: "player_receive_yds", title: "Receiving Yards", icon: "🙌" },
+    { key: "player_reception_yds", title: "Receiving Yards", icon: "🙌" },
     { key: "player_receptions", title: "Receptions", icon: "👐" },
     { key: "player_anytime_td", title: "Anytime TD", icon: "🔥" },
   ],
@@ -95,6 +97,8 @@ export default function GameDetail() {
   const { isMarketsMode, selectedSportsbooks } = useSettings();
   const { completeTour, neverShowTour } = useOnboarding();
   const sportsbooksKey = selectedSportsbooks.join(",");
+  
+  const [selectedBet, setSelectedBet] = useState(null);
   
   // Check tour state ONCE on mount, not on every render
   const [showTour, setShowTour] = useState(() => {
@@ -301,25 +305,55 @@ export default function GameDetail() {
       const existingGame = initialGame;
       
       if (existingGame) {
-        // Convert decimal odds to American format
-        const gameWithAmericanOdds = {
-          ...existingGame,
-          bookmakers: existingGame.bookmakers?.map(book => ({
-            ...book,
-            markets: book.markets?.map(market => ({
-              ...market,
-              outcomes: market.outcomes?.map(outcome => ({
-                name: outcome.name,
-                price: typeof outcome.price === 'number' && outcome.price < 100 && outcome.price > -100
-                  ? convertDecimalToAmerican(outcome.price)
-                  : outcome.price,
-                ...(outcome.point !== undefined && { point: outcome.point })
+        // If the game already has bookmaker odds, just convert and use them
+        if (existingGame.bookmakers?.length) {
+          const gameWithAmericanOdds = {
+            ...existingGame,
+            bookmakers: existingGame.bookmakers.map(book => ({
+              ...book,
+              markets: book.markets?.map(market => ({
+                ...market,
+                outcomes: market.outcomes?.map(outcome => ({
+                  name: outcome.name,
+                  price: typeof outcome.price === 'number' && outcome.price < 100 && outcome.price > -100
+                    ? convertDecimalToAmerican(outcome.price)
+                    : outcome.price,
+                  ...(outcome.point !== undefined && { point: outcome.point })
+                }))
               }))
             }))
-          })) || []
-        };
-        setGame(gameWithAmericanOdds);
-        return gameWithAmericanOdds;
+          };
+          setGame(gameWithAmericanOdds);
+          return gameWithAmericanOdds;
+        }
+
+        // No bookmakers (ESPN-only event) — try fetching live odds by team name match
+        // This handles the case where odds just became available after the user navigated here
+        if (sportKey && existingGame.home_team && existingGame.away_team) {
+          try {
+            const params = new URLSearchParams();
+            params.set("sports", sportKey);
+            params.set("date", existingGame.commence_time || new Date().toISOString());
+            params.set("marketsMode", "0");
+            params.set("sportsbooks", selectedSportsbooks.join(","));
+            params.set("tzOffset", String(new Date().getTimezoneOffset()));
+            const res = await fetch(`/api/odds?${params.toString()}`, { cache: "no-store" });
+            const data = await res.json().catch(() => ({}));
+            const matched = matchGame(data?.games || [], existingGame);
+            if (matched?.bookmakers?.length) {
+              // Found live odds — upgrade the game with the real Odds API ID and odds
+              const upgraded = { ...existingGame, ...matched };
+              setGame(upgraded);
+              return upgraded;
+            }
+          } catch {
+            // Fall through to showing event without odds
+          }
+        }
+
+        // No odds available — show event info without odds sections
+        setGame(existingGame);
+        return existingGame;
       } else {
         const gameData = generateGameDetails(null);
         setGame(gameData);
@@ -362,24 +396,56 @@ export default function GameDetail() {
     setPropsLoading(true);
     setPropsError(null);
     try {
+      // Use the dedicated event-specific props endpoint for better accuracy
       const params = new URLSearchParams();
-      params.set("sports", sportKey);
+      params.set("sportKey", sportKey);
+      params.set("all", "1");
       params.set("date", baseGame.commence_time || new Date().toISOString());
-      params.set("markets", propMarkets.map((market) => market.key).join(","));
-      params.set("marketsMode", "0");
-      params.set("sportsbooks", selectedSportsbooks.join(","));
-      params.set("predictionMarkets", "");
       params.set("tzOffset", String(new Date().getTimezoneOffset()));
 
-      const res = await fetch(`/api/odds?${params.toString()}`, { cache: "no-store" });
+      const res = await fetch(`/api/odds/props/${baseGame.id}?${params.toString()}`, { cache: "no-store" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(data?.error || "Failed to load props");
       }
 
-      const matched = matchGame(data?.games || [], baseGame);
-      if (!matched || !matched.bookmakers?.length) {
-        setPropsError("Props not available for this game.");
+      const groupedProps = data?.groupedProps || [];
+      if (!groupedProps.length) {
+        setPropsError("Prop bets not yet available for this game — check back closer to game time.");
+        propsLoadedRef.current = true;
+        return;
+      }
+
+      // Convert groupedProps format back to bookmakers format for MarketSection compatibility
+      // Build a synthetic bookmakers array merged into the game
+      const syntheticBookmakers = [];
+      groupedProps.forEach((categoryGroup) => {
+        categoryGroup.markets.forEach((market) => {
+          market.bookmakers.forEach((bm) => {
+            const existing = syntheticBookmakers.find((b) => b.title === bm.title);
+            const marketEntry = {
+              key: market.key,
+              last_update: new Date().toISOString(),
+              outcomes: Object.entries(bm.outcomes).map(([outcomeKey, price]) => {
+                const [name, point] = outcomeKey.split("|");
+                return { name, point: point ? parseFloat(point) : undefined, price };
+              }),
+            };
+            if (existing) {
+              existing.markets.push(marketEntry);
+            } else {
+              syntheticBookmakers.push({
+                key: bm.title.toLowerCase().replace(/\s+/g, "_"),
+                title: bm.title,
+                markets: [marketEntry],
+              });
+            }
+          });
+        });
+      });
+
+      if (!syntheticBookmakers.length) {
+        setPropsError("Prop bets not yet available for this game — check back closer to game time.");
         propsLoadedRef.current = true;
         return;
       }
@@ -388,7 +454,7 @@ export default function GameDetail() {
         if (!prev) return prev;
         return {
           ...prev,
-          bookmakers: mergeBookmakers(prev.bookmakers || [], matched.bookmakers || []),
+          bookmakers: mergeBookmakers(prev.bookmakers || [], syntheticBookmakers),
         };
       });
       propsLoadedRef.current = true;
@@ -829,6 +895,14 @@ export default function GameDetail() {
         sportKey={game.sport_key}
       />
 
+      {/* Season Stats Widget */}
+      <GameStatsWidget
+        homeTeam={homeTeam || game.home_team}
+        awayTeam={awayTeam || game.away_team}
+        sportKey={game.sport_key}
+        commenceTime={game.commence_time}
+      />
+
       {/* True Odds Calculator */}
       <TrueOddsWidget game={game} />
 
@@ -836,6 +910,16 @@ export default function GameDetail() {
       <div data-tour="bet-calculator">
         <BetCalculator />
       </div>
+
+      {/* No odds banner for ESPN-only events */}
+      {game && (!game.bookmakers || game.bookmakers.length === 0) && (
+        <div className="rounded-xl border border-slate-700/50 bg-slate-900/50 px-5 py-4 text-center">
+          <p className="text-sm font-medium text-slate-300">Odds Coming Soon</p>
+          <p className="text-xs text-slate-500 mt-1">
+            Sportsbooks haven&apos;t posted lines for this game yet. Check back closer to game time.
+          </p>
+        </div>
+      )}
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
