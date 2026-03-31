@@ -29,7 +29,7 @@ const PROP_MARKETS_BY_SPORT = {
     { key: "player_pass_yds", title: "Passing Yards", icon: "🏈" },
     { key: "player_pass_tds", title: "Passing TDs", icon: "🎯" },
     { key: "player_rush_yds", title: "Rushing Yards", icon: "💨" },
-    { key: "player_receive_yds", title: "Receiving Yards", icon: "🙌" },
+    { key: "player_reception_yds", title: "Receiving Yards", icon: "🙌" },
     { key: "player_receptions", title: "Receptions", icon: "👐" },
     { key: "player_anytime_td", title: "Anytime TD", icon: "🔥" },
   ],
@@ -304,25 +304,55 @@ export default function GameDetail() {
       const existingGame = initialGame;
       
       if (existingGame) {
-        // Convert decimal odds to American format
-        const gameWithAmericanOdds = {
-          ...existingGame,
-          bookmakers: existingGame.bookmakers?.map(book => ({
-            ...book,
-            markets: book.markets?.map(market => ({
-              ...market,
-              outcomes: market.outcomes?.map(outcome => ({
-                name: outcome.name,
-                price: typeof outcome.price === 'number' && outcome.price < 100 && outcome.price > -100
-                  ? convertDecimalToAmerican(outcome.price)
-                  : outcome.price,
-                ...(outcome.point !== undefined && { point: outcome.point })
+        // If the game already has bookmaker odds, just convert and use them
+        if (existingGame.bookmakers?.length) {
+          const gameWithAmericanOdds = {
+            ...existingGame,
+            bookmakers: existingGame.bookmakers.map(book => ({
+              ...book,
+              markets: book.markets?.map(market => ({
+                ...market,
+                outcomes: market.outcomes?.map(outcome => ({
+                  name: outcome.name,
+                  price: typeof outcome.price === 'number' && outcome.price < 100 && outcome.price > -100
+                    ? convertDecimalToAmerican(outcome.price)
+                    : outcome.price,
+                  ...(outcome.point !== undefined && { point: outcome.point })
+                }))
               }))
             }))
-          })) || []
-        };
-        setGame(gameWithAmericanOdds);
-        return gameWithAmericanOdds;
+          };
+          setGame(gameWithAmericanOdds);
+          return gameWithAmericanOdds;
+        }
+
+        // No bookmakers (ESPN-only event) — try fetching live odds by team name match
+        // This handles the case where odds just became available after the user navigated here
+        if (sportKey && existingGame.home_team && existingGame.away_team) {
+          try {
+            const params = new URLSearchParams();
+            params.set("sports", sportKey);
+            params.set("date", existingGame.commence_time || new Date().toISOString());
+            params.set("marketsMode", "0");
+            params.set("sportsbooks", selectedSportsbooks.join(","));
+            params.set("tzOffset", String(new Date().getTimezoneOffset()));
+            const res = await fetch(`/api/odds?${params.toString()}`, { cache: "no-store" });
+            const data = await res.json().catch(() => ({}));
+            const matched = matchGame(data?.games || [], existingGame);
+            if (matched?.bookmakers?.length) {
+              // Found live odds — upgrade the game with the real Odds API ID and odds
+              const upgraded = { ...existingGame, ...matched };
+              setGame(upgraded);
+              return upgraded;
+            }
+          } catch {
+            // Fall through to showing event without odds
+          }
+        }
+
+        // No odds available — show event info without odds sections
+        setGame(existingGame);
+        return existingGame;
       } else {
         const gameData = generateGameDetails(null);
         setGame(gameData);
@@ -871,6 +901,16 @@ export default function GameDetail() {
       <div data-tour="bet-calculator">
         <BetCalculator />
       </div>
+
+      {/* No odds banner for ESPN-only events */}
+      {game && (!game.bookmakers || game.bookmakers.length === 0) && (
+        <div className="rounded-xl border border-slate-700/50 bg-slate-900/50 px-5 py-4 text-center">
+          <p className="text-sm font-medium text-slate-300">Odds Coming Soon</p>
+          <p className="text-xs text-slate-500 mt-1">
+            Sportsbooks haven&apos;t posted lines for this game yet. Check back closer to game time.
+          </p>
+        </div>
+      )}
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">

@@ -23,8 +23,9 @@ function getUtcDayRange(dateValue, tzOffsetMinutes = null) {
 }
 
 // Map prop market keys to display names and categories
+// Only include keys that are valid on the Odds API /events/{id}/odds endpoint
 const PROP_MARKETS = {
-  // Player props - points/rebs/assists
+  // Basketball player props
   player_points: { name: "Player Points", category: "Player Props" },
   player_rebounds: { name: "Player Rebounds", category: "Player Props" },
   player_assists: { name: "Player Assists", category: "Player Props" },
@@ -35,7 +36,7 @@ const PROP_MARKETS = {
   player_pass_yds: { name: "Passing Yards", category: "Player Props" },
   player_pass_tds: { name: "Passing TDs", category: "Player Props" },
   player_rush_yds: { name: "Rushing Yards", category: "Player Props" },
-  player_receive_yds: { name: "Receiving Yards", category: "Player Props" },
+  player_reception_yds: { name: "Receiving Yards", category: "Player Props" },
   player_receptions: { name: "Receptions", category: "Player Props" },
   player_anytime_td: { name: "Anytime TD", category: "Player Props" },
   
@@ -49,13 +50,11 @@ const PROP_MARKETS = {
   player_goals: { name: "Player Goals", category: "Player Props" },
   player_shots_on_goal: { name: "Shots on Goal", category: "Player Props" },
   
-  // Game props
+  // Alternate lines (valid on event endpoint, team_totals_* are not)
   alternate_spreads: { name: "Alternate Spreads", category: "Game Props" },
   alternate_totals: { name: "Alternate Totals", category: "Game Props" },
-  team_totals_home: { name: "Home Team Total", category: "Game Props" },
-  team_totals_away: { name: "Away Team Total", category: "Game Props" },
   
-  // Special props
+  // Alternate player props
   player_points_alternate: { name: "Alternate Player Points", category: "Player Props" },
   player_rebounds_alternate: { name: "Alternate Player Rebounds", category: "Player Props" },
   player_assists_alternate: { name: "Alternate Player Assists", category: "Player Props" },
@@ -101,21 +100,20 @@ export async function GET(request, { params }) {
   let propMarketsToFetch = [];
   
   if (sportKey) {
-    // Basketball props
+    // Basketball props — team_totals_* not supported on event endpoint
     if (sportKey.includes('basketball')) {
       propMarketsToFetch = [
         'player_points', 'player_rebounds', 'player_assists', 'player_threes',
         'player_points_rebounds_assists', 'alternate_spreads', 'alternate_totals',
-        'team_totals_home', 'team_totals_away'
       ];
     }
     
-    // Football props
+    // Football props — player_receive_yds not a valid Odds API market key
     if (sportKey.includes('americanfootball')) {
       propMarketsToFetch = [
-        'player_pass_yds', 'player_pass_tds', 'player_rush_yds', 'player_receive_yds',
-        'player_receptions', 'player_anytime_td', 'alternate_spreads', 'alternate_totals',
-        'team_totals_home', 'team_totals_away'
+        'player_pass_yds', 'player_pass_tds', 'player_rush_yds',
+        'player_reception_yds', 'player_receptions', 'player_anytime_td',
+        'alternate_spreads', 'alternate_totals',
       ];
     }
     
@@ -123,7 +121,7 @@ export async function GET(request, { params }) {
     if (sportKey.includes('baseball')) {
       propMarketsToFetch = [
         'batter_home_runs', 'batter_hits', 'batter_rbis', 'pitcher_strikeouts',
-        'alternate_totals', 'team_totals_home', 'team_totals_away'
+        'alternate_totals',
       ];
     }
     
@@ -131,7 +129,6 @@ export async function GET(request, { params }) {
     if (sportKey.includes('icehockey')) {
       propMarketsToFetch = [
         'player_goals', 'player_shots_on_goal', 'alternate_totals',
-        'team_totals_home', 'team_totals_away'
       ];
     }
     
