@@ -9,6 +9,7 @@ import { motion } from "framer-motion";
 import SportFilter from "@/components/odds/SportFilter";
 import DatePicker from "@/components/odds/DatePicker";
 import GameCard from "@/components/odds/GameCard";
+import MultiDaySportFeed from "@/components/odds/MultiDaySportFeed";
 import { useSubscription } from "@/components/subscription/SubscriptionContext";
 import UpgradeBanner from "@/components/subscription/UpgradeBanner";
 import { useSettings } from "@/components/settings/SettingsContext";
@@ -84,6 +85,9 @@ export default function Home() {
   const [mounted, setMounted] = useState(false);
   const [tourInitialized, setTourInitialized] = useState(false);
   const [tzOffset, setTzOffset] = useState(0);
+  const [multiDayData, setMultiDayData] = useState(null); // { categoryId, days: [...] }
+  const [multiDayLoading, setMultiDayLoading] = useState(false);
+  const [multiDayError, setMultiDayError] = useState(null);
   const oddsGroupCache = useRef({});
   const summaryLoaded = summary && Object.keys(summary).length > 0;
   const summaryLoadedRef = useRef(false);
@@ -203,6 +207,8 @@ export default function Home() {
     setExpandedCategories([]);
     setErrorsByCategory({});
     setApiError(null);
+    setMultiDayData(null);
+    setMultiDayError(null);
   }, [safeSelectedDate, isMarketsMode, selectedPredictionMarkets, selectedSportsbooks]);
 
   useEffect(() => {
@@ -498,6 +504,77 @@ export default function Home() {
     },
     [fetchOdds, getOddsKeysForCategory, loadedCategories, loadCategoryEvents]
   );
+
+  const fetchMultiDayFeed = useCallback(
+    async (category, startEspnDate = null) => {
+      if (!category || !category.espnPaths || category.espnPaths.length === 0) {
+        return null;
+      }
+      const params = new URLSearchParams();
+      params.set("category", category.id);
+      params.set("tzOffset", String(tzOffset));
+      params.set("days", "14"); // fetch 14 days initially for sparse sports
+      if (startEspnDate) {
+        // Convert YYYYMMDD to ISO
+        const y = startEspnDate.slice(0, 4);
+        const m = startEspnDate.slice(4, 6);
+        const d = startEspnDate.slice(6, 8);
+        params.set("startDate", `${y}-${m}-${d}T12:00:00Z`);
+      } else {
+        params.set("startDate", new Date().toISOString());
+      }
+      const res = await fetch(`/api/sports/multi-day?${params.toString()}`, { cache: "no-store" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to fetch multi-day feed");
+      return data;
+    },
+    [tzOffset]
+  );
+
+  const handleMultiDayLoadMore = useCallback(
+    async (lastEspnDate) => {
+      if (!lastEspnDate) return { days: [] };
+      const category = ALL_CATEGORIES.find((sport) => sport.id === selectedSport);
+      if (!category) return { days: [] };
+      // next start date = lastEspnDate + 1
+      const y = parseInt(lastEspnDate.slice(0, 4), 10);
+      const mo = parseInt(lastEspnDate.slice(4, 6), 10) - 1;
+      const dy = parseInt(lastEspnDate.slice(6, 8), 10);
+      const nextDate = new Date(Date.UTC(y, mo, dy + 1));
+      // Fetch the next 14 days from nextDate
+      const params = new URLSearchParams();
+      params.set("category", category.id);
+      params.set("tzOffset", String(tzOffset));
+      params.set("days", "14");
+      params.set("startDate", nextDate.toISOString());
+      const res = await fetch(`/api/sports/multi-day?${params.toString()}`, { cache: "no-store" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return { days: [] };
+      return data;
+    },
+    [selectedSport, tzOffset]
+  );
+
+  // Load multi-day feed when a specific sport is selected
+  useEffect(() => {
+    if (!showSportsView) return;
+    if (selectedSport === "all") return;
+    const category = ALL_CATEGORIES.find((sport) => sport.id === selectedSport);
+    if (!category || !category.espnPaths || category.espnPaths.length === 0) return;
+    setMultiDayData(null);
+    setMultiDayError(null);
+    setMultiDayLoading(true);
+    fetchMultiDayFeed(category)
+      .then((data) => {
+        setMultiDayData(data);
+      })
+      .catch((err) => {
+        setMultiDayError(err?.message || "Failed to load multi-day feed");
+      })
+      .finally(() => {
+        setMultiDayLoading(false);
+      });
+  }, [showSportsView, selectedSport, fetchMultiDayFeed]);
 
   useEffect(() => {
     if (!showSportsView) return;
@@ -821,14 +898,17 @@ export default function Home() {
               <SportFilter
                 sports={navSports}
                 selectedSport={selectedSport}
-                onSelectSport={(id) => { setSelectedSport(id); setNoGamesBanner(null); }}
+                onSelectSport={(id) => { setSelectedSport(id); setNoGamesBanner(null); setMultiDayData(null); }}
                 sportsWithGamesToday={sportsWithGamesToday.map(s => s.id)}
                 onSportWithoutGamesClick={handleSportWithoutGamesClick}
               />
             </div>
-            <div className="flex items-center gap-2" data-tour="date-picker">
-              <DatePicker selectedDate={safeSelectedDate} onDateChange={(d) => { setSelectedDate(d); setNoGamesBanner(null); }} />
-            </div>
+            {/* Hide date picker in single-sport mode (multi-day feed spans multiple days) */}
+            {selectedSport === "all" && (
+              <div className="flex items-center gap-2" data-tour="date-picker">
+                <DatePicker selectedDate={safeSelectedDate} onDateChange={(d) => { setSelectedDate(d); setNoGamesBanner(null); }} />
+              </div>
+            )}
           </div>
         ) : (
           <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
@@ -891,16 +971,13 @@ export default function Home() {
             </motion.div>
           )}
 
-          {loading && !summaryLoading ? (
+          {loading && !summaryLoading && selectedSport === "all" ? (
             <div className="flex items-center justify-center py-20">
               <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
             </div>
           ) : selectedSport !== "all" ? (
             (() => {
               const category = ALL_CATEGORIES.find((sport) => sport.id === selectedSport);
-              const games = category ? gamesByCategory[category.id] || [] : [];
-              const events = category ? eventsByCategory[category.id] || [] : [];
-              const errorMessage = category ? errorsByCategory[category.id] : null;
               if (!category) {
                 return (
                   <div className="flex items-center justify-center py-20 text-slate-400">
@@ -909,33 +986,67 @@ export default function Home() {
                   </div>
                 );
               }
-              if (loadingCategories[category.id] || loadingEvents[category.id]) {
+
+              // For outright/futures sports (no espnPaths), use the old single-day view
+              const isOutrightSport = !category.espnPaths || category.espnPaths.length === 0;
+              if (isOutrightSport) {
+                const games = gamesByCategory[category.id] || [];
+                const events = eventsByCategory[category.id] || [];
+                const errorMessage = errorsByCategory[category.id];
+                if (loadingCategories[category.id] || loadingEvents[category.id]) {
+                  return (
+                    <div className="flex items-center justify-center py-20">
+                      <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+                    </div>
+                  );
+                }
+                if (games.length === 0 && events.length > 0) {
+                  return <div className="space-y-4">{renderCategorySection(category, games)}</div>;
+                }
+                if (errorMessage) {
+                  return (
+                    <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+                      <Trophy className="w-12 h-12 mb-3 text-slate-500" />
+                      <p>{errorMessage}</p>
+                    </div>
+                  );
+                }
+                if (games.length === 0) {
+                  return (
+                    <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+                      <Trophy className="w-12 h-12 mb-3 text-slate-500" />
+                      <p>No games found for this date.</p>
+                    </div>
+                  );
+                }
+                return <div className="space-y-4">{renderCategorySection(category, games)}</div>;
+              }
+
+              // Multi-day feed for sports with ESPN data
+              if (multiDayLoading) {
                 return (
                   <div className="flex items-center justify-center py-20">
                     <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
                   </div>
                 );
               }
-              if (games.length === 0 && events.length > 0) {
-                return <div className="space-y-4">{renderCategorySection(category, games)}</div>;
-              }
-              if (errorMessage) {
+              if (multiDayError) {
                 return (
                   <div className="flex flex-col items-center justify-center py-20 text-slate-400">
                     <Trophy className="w-12 h-12 mb-3 text-slate-500" />
-                    <p>{errorMessage}</p>
+                    <p>{multiDayError}</p>
                   </div>
                 );
               }
-              if (games.length === 0) {
-                return (
-                  <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-                    <Trophy className="w-12 h-12 mb-3 text-slate-500" />
-                    <p>No games found for this date.</p>
-                  </div>
-                );
-              }
-              return <div className="space-y-4">{renderCategorySection(category, games)}</div>;
+              const oddsGames = gamesByCategory[category.id] || [];
+              return (
+                <MultiDaySportFeed
+                  category={category}
+                  initialDays={multiDayData?.days || []}
+                  oddsGames={oddsGames}
+                  onLoadMore={handleMultiDayLoadMore}
+                />
+              );
             })()
           ) : (
             <div className="space-y-4">
