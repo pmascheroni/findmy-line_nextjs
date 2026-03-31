@@ -14,6 +14,7 @@ import LineHistoryChart from "@/components/game/LineHistoryChart";
 import BetCalculator from "@/components/game/BetCalculator";
 import InjuriesWidget from "@/components/game/InjuriesWidget";
 import TrueOddsWidget from "@/components/game/TrueOddsWidget";
+import GameStatsWidget from "@/components/game/GameStatsWidget";
 import PropBetsSection from "@/components/game/PropBetsSection";
 import GameInfoBar from "@/components/game/GameInfoBar";
 import { useTeamData } from "@/components/game/useTeamData";
@@ -892,6 +893,14 @@ export default function GameDetail() {
         homeTeam={homeTeam || game.home_team}
         awayTeam={awayTeam || game.away_team}
         sportKey={game.sport_key}
+      />
+
+      {/* Season Stats Widget */}
+      <GameStatsWidget
+        homeTeam={homeTeam || game.home_team}
+        awayTeam={awayTeam || game.away_team}
+        sportKey={game.sport_key}
+        commenceTime={game.commence_time}
       />
 
       {/* True Odds Calculator */}
