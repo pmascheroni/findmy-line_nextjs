@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Loader2, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
@@ -8,8 +9,11 @@ import GameCard from "./GameCard";
 
 /**
  * A slim matchup row for ESPN events that don't have Odds API data.
+ * Clickable to navigate to event detail page with ESPN data.
  */
-function MatchupRow({ event }) {
+function MatchupRow({ event, categoryId }) {
+  const router = useRouter();
+  
   const gameTime = event.date ? new Date(event.date) : null;
   const timeLabel = gameTime
     ? gameTime.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })
@@ -17,8 +21,38 @@ function MatchupRow({ event }) {
 
   const hasTeams = event.homeTeam || event.awayTeam;
 
+  const handleClick = () => {
+    if (!event.id) return;
+    // Store ESPN event as a synthetic game in sessionStorage for the detail page
+    const syntheticGame = {
+      id: event.id,
+      sport_key: categoryId,
+      sport_title: event.name || "Event",
+      commence_time: event.date || new Date().toISOString(),
+      home_team: event.homeTeam || "Home",
+      away_team: event.awayTeam || "Away",
+      venue: event.venue || "",
+      bookmakers: [],
+      // Store ESPN metadata for display
+      _espnMeta: {
+        homeAbbrev: event.homeAbbrev,
+        awayAbbrev: event.awayAbbrev,
+        homeScore: event.homeScore,
+        awayScore: event.awayScore,
+        homeLogo: event.homeLogo,
+        awayLogo: event.awayLogo,
+        status: event.status,
+      }
+    };
+    window.sessionStorage.setItem(`game_${event.id}`, JSON.stringify(syntheticGame));
+    router.push(`/game/${event.id}?sport=${categoryId}`);
+  };
+
   return (
-    <div className="rounded-xl border border-slate-800/60 bg-slate-900/40 px-4 py-3">
+    <button
+      onClick={handleClick}
+      className="w-full text-left rounded-xl border border-slate-800/60 bg-slate-900/40 px-4 py-3 hover:bg-slate-900/60 hover:border-slate-700/60 transition-all duration-200"
+    >
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex-1">
           {hasTeams ? (
@@ -59,7 +93,7 @@ function MatchupRow({ event }) {
       {event.venue && (
         <div className="mt-1 text-xs text-slate-600">{event.venue}</div>
       )}
-    </div>
+    </button>
   );
 }
 
@@ -206,7 +240,7 @@ export default function MultiDaySportFeed({ category, initialDays, oddsGames = [
               if (matchedGame) {
                 return <GameCard key={event.id} game={matchedGame} index={0} />;
               }
-              return <MatchupRow key={event.id} event={event} />;
+              return <MatchupRow key={event.id} event={event} categoryId={category?.id} />;
             })}
           </div>
         </motion.div>
