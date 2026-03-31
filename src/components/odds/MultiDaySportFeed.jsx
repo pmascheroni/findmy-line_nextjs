@@ -53,7 +53,7 @@ function MatchupRow({ event }) {
           {event.status && event.status !== "Scheduled" && (
             <span className="text-xs text-slate-400">{event.status}</span>
           )}
-          <span className="text-xs text-slate-600 italic">Odds TBD</span>
+          <span className="text-xs text-slate-500 italic">Odds Coming Soon</span>
         </div>
       </div>
       {event.venue && (

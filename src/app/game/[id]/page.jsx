@@ -365,24 +365,56 @@ export default function GameDetail() {
     setPropsLoading(true);
     setPropsError(null);
     try {
+      // Use the dedicated event-specific props endpoint for better accuracy
       const params = new URLSearchParams();
-      params.set("sports", sportKey);
+      params.set("sportKey", sportKey);
+      params.set("all", "1");
       params.set("date", baseGame.commence_time || new Date().toISOString());
-      params.set("markets", propMarkets.map((market) => market.key).join(","));
-      params.set("marketsMode", "0");
-      params.set("sportsbooks", selectedSportsbooks.join(","));
-      params.set("predictionMarkets", "");
       params.set("tzOffset", String(new Date().getTimezoneOffset()));
 
-      const res = await fetch(`/api/odds?${params.toString()}`, { cache: "no-store" });
+      const res = await fetch(`/api/odds/props/${baseGame.id}?${params.toString()}`, { cache: "no-store" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(data?.error || "Failed to load props");
       }
 
-      const matched = matchGame(data?.games || [], baseGame);
-      if (!matched || !matched.bookmakers?.length) {
-        setPropsError("Props not available for this game.");
+      const groupedProps = data?.groupedProps || [];
+      if (!groupedProps.length) {
+        setPropsError("Prop bets not yet available for this game — check back closer to game time.");
+        propsLoadedRef.current = true;
+        return;
+      }
+
+      // Convert groupedProps format back to bookmakers format for MarketSection compatibility
+      // Build a synthetic bookmakers array merged into the game
+      const syntheticBookmakers = [];
+      groupedProps.forEach((categoryGroup) => {
+        categoryGroup.markets.forEach((market) => {
+          market.bookmakers.forEach((bm) => {
+            const existing = syntheticBookmakers.find((b) => b.title === bm.title);
+            const marketEntry = {
+              key: market.key,
+              last_update: new Date().toISOString(),
+              outcomes: Object.entries(bm.outcomes).map(([outcomeKey, price]) => {
+                const [name, point] = outcomeKey.split("|");
+                return { name, point: point ? parseFloat(point) : undefined, price };
+              }),
+            };
+            if (existing) {
+              existing.markets.push(marketEntry);
+            } else {
+              syntheticBookmakers.push({
+                key: bm.title.toLowerCase().replace(/\s+/g, "_"),
+                title: bm.title,
+                markets: [marketEntry],
+              });
+            }
+          });
+        });
+      });
+
+      if (!syntheticBookmakers.length) {
+        setPropsError("Prop bets not yet available for this game — check back closer to game time.");
         propsLoadedRef.current = true;
         return;
       }
@@ -391,7 +423,7 @@ export default function GameDetail() {
         if (!prev) return prev;
         return {
           ...prev,
-          bookmakers: mergeBookmakers(prev.bookmakers || [], matched.bookmakers || []),
+          bookmakers: mergeBookmakers(prev.bookmakers || [], syntheticBookmakers),
         };
       });
       propsLoadedRef.current = true;

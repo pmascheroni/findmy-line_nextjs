@@ -717,8 +717,8 @@ export default function Home() {
           </div>
           <div className="text-xs text-slate-500">{event.status || "Scheduled"}</div>
         </div>
-        <div className="mt-3 rounded-lg border border-slate-800/60 bg-slate-950/50 px-3 py-2 text-xs text-slate-400">
-          Odds unavailable for this event from the current odds providers.
+        <div className="mt-3 rounded-lg border border-slate-800/60 bg-slate-950/50 px-3 py-2 text-xs text-slate-500">
+          Odds Coming Soon — not yet available from sportsbooks.
         </div>
       </div>
     );
@@ -903,12 +903,10 @@ export default function Home() {
                 onSportWithoutGamesClick={handleSportWithoutGamesClick}
               />
             </div>
-            {/* Hide date picker in single-sport mode (multi-day feed spans multiple days) */}
-            {selectedSport === "all" && (
-              <div className="flex items-center gap-2" data-tour="date-picker">
-                <DatePicker selectedDate={safeSelectedDate} onDateChange={(d) => { setSelectedDate(d); setNoGamesBanner(null); }} />
-              </div>
-            )}
+            {/* Always show date picker so users can jump to any date */}
+            <div className="flex items-center gap-2" data-tour="date-picker">
+              <DatePicker selectedDate={safeSelectedDate} onDateChange={(d) => { setSelectedDate(d); setNoGamesBanner(null); setMultiDayData(null); }} />
+            </div>
           </div>
         ) : (
           <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">

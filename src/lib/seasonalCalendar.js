@@ -85,7 +85,8 @@ export const SEASONAL_CALENDAR = [
   {
     id: 'soccer_fifa_world_cup',
     name: 'World Cup',
-    // Specific visibility window already in sportsCatalog for 2026
+    // Visibility window set in sportsCatalog (2026-03-01 to 2026-07-19)
+    // No seasons entry needed here — the catalog visibilityWindow controls display
   },
   {
     id: 'golf_masters_tournament_winner',
@@ -217,11 +218,7 @@ export const SEASONAL_CALENDAR = [
       { startMonth: 0, startDay: 1, endMonth: 11, endDay: 31 }, // All year (tournament spans calendar year)
     ]
   },
-  {
-    id: 'olympics',
-    name: 'Olympics',
-    // Already has visibility window
-  }
+  // Olympics removed — 2024 Paris Olympics are over
 ];
 
 // Helper to check if a date is within any season for a sport
