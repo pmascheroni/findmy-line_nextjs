@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { format, isToday, isSameDay } from "date-fns";
 import { Loader2, AlertCircle, RefreshCw, Trophy, ChevronDown, ChevronRight, HelpCircle, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,60 @@ import SettingsModal from "@/components/settings/SettingsModal";
 import { TOP_SPORTS, EXTRA_SPORTS, ALL_CATEGORIES, TOP_IDS } from "@/lib/sportsCatalog";
 import { isSportInSeason, SEASONAL_CALENDAR } from "@/lib/seasonalCalendar";
 import PredictionMarketComparisonTable from "@/components/prediction/PredictionMarketComparisonTable";
+
+/**
+ * Clickable event row for ESPN events without sportsbook odds yet.
+ * Navigates to /game/[id] with the event stored in sessionStorage.
+ */
+function EventRow({ event, categoryId }) {
+  const router = useRouter();
+  if (!event) return null;
+
+  const handleClick = () => {
+    if (!event.id) return;
+    const syntheticGame = {
+      id: event.id,
+      sport_key: categoryId,
+      sport_title: event.name || "Event",
+      commence_time: event.date || new Date().toISOString(),
+      home_team: event.homeTeam || "Home",
+      away_team: event.awayTeam || "Away",
+      venue: event.venue || "",
+      bookmakers: [],
+      _espnMeta: {
+        homeAbbrev: event.homeAbbrev,
+        awayAbbrev: event.awayAbbrev,
+        homeLogo: event.homeLogo,
+        awayLogo: event.awayLogo,
+        status: event.status,
+      },
+    };
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem(`game_${event.id}`, JSON.stringify(syntheticGame));
+    }
+    router.push(`/game/${event.id}?sport=${categoryId}`);
+  };
+
+  return (
+    <button
+      onClick={handleClick}
+      className="w-full text-left rounded-xl border border-slate-800/60 bg-slate-900/40 px-4 py-3 hover:bg-slate-900/60 hover:border-slate-700/60 transition-all duration-200"
+    >
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="text-sm text-white font-medium">{event.name}</div>
+          {event.shortName && event.shortName !== event.name && (
+            <div className="text-xs text-slate-400">{event.shortName}</div>
+          )}
+        </div>
+        <div className="text-xs text-slate-500">{event.status || "Scheduled"}</div>
+      </div>
+      <div className="mt-3 rounded-lg border border-slate-800/60 bg-slate-950/50 px-3 py-2 text-xs text-slate-500">
+        Odds Coming Soon — not yet available from sportsbooks.
+      </div>
+    </button>
+  );
+}
 
 const BOOKMAKERS = "draftkings,fanduel,betmgm,williamhill_us,espnbet";
 const MAX_GAMES_PER_CATEGORY = 10;
@@ -701,27 +756,10 @@ export default function Home() {
     return items;
   };
 
-  const renderEventRow = (event) => {
+  // renderEventRow delegates to the EventRow component defined above
+  const renderEventRow = (event, categoryId) => {
     if (!event) return null;
-    return (
-      <div
-        key={event.id}
-        className="rounded-xl border border-slate-800/60 bg-slate-900/40 px-4 py-3"
-      >
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="text-sm text-white font-medium">{event.name}</div>
-            {event.shortName && event.shortName !== event.name && (
-              <div className="text-xs text-slate-400">{event.shortName}</div>
-            )}
-          </div>
-          <div className="text-xs text-slate-500">{event.status || "Scheduled"}</div>
-        </div>
-        <div className="mt-3 rounded-lg border border-slate-800/60 bg-slate-950/50 px-3 py-2 text-xs text-slate-500">
-          Odds Coming Soon — not yet available from sportsbooks.
-        </div>
-      </div>
-    );
+    return <EventRow key={event.id} event={event} categoryId={categoryId} />;
   };
 
   const renderCategorySection = (category, games = []) => {
@@ -764,7 +802,7 @@ export default function Home() {
               item.type === "game" && item.game ? (
                 <GameCard key={item.game.id} game={item.game} index={index} />
               ) : (
-                renderEventRow(item.event)
+                renderEventRow(item.event, category.id)
               )
             )}
             {showMore && (
