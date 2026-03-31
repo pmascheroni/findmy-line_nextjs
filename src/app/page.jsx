@@ -62,6 +62,7 @@ export default function Home() {
   });
   const [gamesByCategory, setGamesByCategory] = useState({});
   const [eventsByCategory, setEventsByCategory] = useState({});
+  const [noGamesBanner, setNoGamesBanner] = useState(null); // { sportName, nextDate }
   const [loading, setLoading] = useState(false);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summary, setSummary] = useState({});
@@ -278,13 +279,41 @@ export default function Home() {
     return [...availableTopSports, ...availableExtraSports].filter(sport => (summary[sport.id] || 0) > 0);
   }, [summary, summaryLoaded, availableTopSports, availableExtraSports]);
 
-  const handleSportWithoutGamesClick = useCallback((sport) => {
-    // For now, we'll just select the sport and show a message
-    // In future, we could auto-navigate to next date with games
+  const handleSportWithoutGamesClick = useCallback(async (sport) => {
+    // Select the sport immediately so the user sees the correct filter
     setSelectedSport(sport.id);
-    // Show a toast or message that there are no games today for this sport
-    console.log(`No games today for ${sport.name}. Would navigate to next available date.`);
-  }, []);
+    // Show "no games today" banner right away
+    setNoGamesBanner({ sportName: sport.name, nextDate: null, searching: true });
+
+    // Search up to 14 days ahead for the next date with events
+    try {
+      const tzOffset = -(new Date().getTimezoneOffset());
+      let found = null;
+      for (let i = 1; i <= 14; i++) {
+        const candidate = new Date(safeSelectedDate);
+        candidate.setDate(candidate.getDate() + i);
+        const res = await fetch(
+          `/api/sports/summary?date=${candidate.toISOString()}&tzOffset=${tzOffset}`
+        );
+        if (!res.ok) continue;
+        const data = await res.json();
+        const count = data?.counts?.[sport.id] ?? 0;
+        if (count > 0) {
+          found = candidate;
+          break;
+        }
+      }
+      if (found) {
+        setNoGamesBanner({ sportName: sport.name, nextDate: found, searching: false });
+        // Auto-navigate to that date
+        setSelectedDate(found);
+      } else {
+        setNoGamesBanner({ sportName: sport.name, nextDate: null, searching: false });
+      }
+    } catch {
+      setNoGamesBanner({ sportName: sport.name, nextDate: null, searching: false });
+    }
+  }, [safeSelectedDate]);
 
   const visiblePredictionMarkets = useMemo(() => {
     if (predictionExpanded) return predictionMarkets;
@@ -792,13 +821,13 @@ export default function Home() {
               <SportFilter
                 sports={navSports}
                 selectedSport={selectedSport}
-                onSelectSport={setSelectedSport}
+                onSelectSport={(id) => { setSelectedSport(id); setNoGamesBanner(null); }}
                 sportsWithGamesToday={sportsWithGamesToday.map(s => s.id)}
                 onSportWithoutGamesClick={handleSportWithoutGamesClick}
               />
             </div>
             <div className="flex items-center gap-2" data-tour="date-picker">
-              <DatePicker selectedDate={safeSelectedDate} onDateChange={setSelectedDate} />
+              <DatePicker selectedDate={safeSelectedDate} onDateChange={(d) => { setSelectedDate(d); setNoGamesBanner(null); }} />
             </div>
           </div>
         ) : (
@@ -832,6 +861,32 @@ export default function Home() {
               <div className="flex items-center gap-2">
                 <AlertCircle className="w-4 h-4" />
                 <span>Live odds are temporarily unavailable.</span>
+              </div>
+            </motion.div>
+          )}
+
+          {noGamesBanner && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-300 text-sm"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span>📅</span>
+                  {noGamesBanner.searching ? (
+                    <span>No <strong>{noGamesBanner.sportName}</strong> games today — searching for next available date…</span>
+                  ) : noGamesBanner.nextDate ? (
+                    <span>No <strong>{noGamesBanner.sportName}</strong> games today — showing next available: <strong>{format(noGamesBanner.nextDate, "MMMM d")}</strong></span>
+                  ) : (
+                    <span>No <strong>{noGamesBanner.sportName}</strong> games scheduled in the next 2 weeks.</span>
+                  )}
+                </div>
+                <button
+                  onClick={() => setNoGamesBanner(null)}
+                  className="text-blue-400 hover:text-white ml-2 shrink-0"
+                  aria-label="Dismiss"
+                >✕</button>
               </div>
             </motion.div>
           )}

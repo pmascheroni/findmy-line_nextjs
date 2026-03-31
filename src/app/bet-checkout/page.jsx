@@ -143,13 +143,7 @@ export default function BetCheckout() {
                           </div>
                         </div>
                         <Button
-                          onClick={() => removeBet(
-                            bet.gameId,
-                            bet.market,
-                            bet.outcome,
-                            bet.sportsbook,
-                            bet.point
-                          )}
+                          onClick={() => removeBet(bet)}
                           variant="ghost"
                           size="sm"
                           className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
