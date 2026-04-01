@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
 import { SPORT_GROUPS, EXTRA_SPORTS } from "@/lib/sportsCatalog";
 
-export default function SportFilter({ sports, selectedSport, onSelectSport, sportsWithGamesToday = [], onSportWithoutGamesClick, expandedGroups = {}, onToggleGroup }) {
+export default function SportFilter({ sports, selectedSport, onSelectSport, sportsWithGamesToday = [], onSportWithoutGamesClick, expandedGroups = {}, onToggleGroup, upcomingSports = [] }) {
   const scrollerRef = useRef(null);
 
   const scrollBy = (direction) => {
@@ -49,6 +49,8 @@ export default function SportFilter({ sports, selectedSport, onSelectSport, spor
               }
             };
             
+            const hasGamesUpcoming = upcomingSports.includes(sport.id);
+
             return (
               <button
                 key={sport.id}
@@ -72,6 +74,18 @@ export default function SportFilter({ sports, selectedSport, onSelectSport, spor
                 <span className="relative flex items-center gap-2">
                   <span>{sport.icon}</span>
                   <span className="hidden sm:inline">{sport.name}</span>
+                  
+                  {/* Indicator dots: green = today, yellow = upcoming, none = no games */}
+                  {sport.id !== 'all' && (
+                    <span className="ml-1">
+                      {hasGamesToday ? (
+                        <span className="inline-block w-2 h-2 bg-green-500 rounded-full" title="Games today" />
+                      ) : hasGamesUpcoming ? (
+                        <span className="inline-block w-2 h-2 bg-yellow-500 rounded-full" title="Games this week" />
+                      ) : null}
+                    </span>
+                  )}
+                  
                   {isDimmed && <span className="text-xs ml-1">⏱️</span>}
                   {isGrouped && (
                     <motion.div

@@ -1026,6 +1026,7 @@ export default function Home() {
                   onSportWithoutGamesClick={handleSportWithoutGamesClick}
                   expandedGroups={expandedGroups}
                   onToggleGroup={handleToggleGroup}
+                  upcomingSports={[]} // TODO: Calculate from multi-day summaries
                 />
               </div>
               {/* Always show date picker so users can jump to any date */}
