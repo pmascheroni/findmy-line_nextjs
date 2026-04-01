@@ -10,6 +10,7 @@ import { motion } from "framer-motion";
 import SportFilter from "@/components/odds/SportFilter";
 import LeagueFilter from "@/components/odds/LeagueFilter";
 import DatePicker from "@/components/odds/DatePicker";
+import DateStrip from "@/components/odds/DateStrip";
 import GameCard from "@/components/odds/GameCard";
 import EventSearch from "@/components/search/EventSearch";
 import MultiDaySportFeed from "@/components/odds/MultiDaySportFeed";
@@ -1001,6 +1002,13 @@ export default function Home() {
 
         {showSportsView ? (
           <>
+            {/* Date Strip - Sticky at top */}
+            <DateStrip
+              selectedDate={safeSelectedDate}
+              onDateChange={(d) => { setSelectedDate(d); setNoGamesBanner(null); setMultiDayData(null); }}
+              datesWithGames={Object.keys(summary).length > 0 ? [safeSelectedDate] : []}
+            />
+
             {/* Search Bar Row */}
             <div className="flex gap-3">
               <EventSearch allCategories={ALL_CATEGORIES} allGames={Object.values(gamesByCategory).flat()} allEvents={Object.values(eventsByCategory).flat()} />
