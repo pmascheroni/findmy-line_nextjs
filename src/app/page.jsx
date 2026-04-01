@@ -10,6 +10,7 @@ import { motion } from "framer-motion";
 import SportFilter from "@/components/odds/SportFilter";
 import DatePicker from "@/components/odds/DatePicker";
 import GameCard from "@/components/odds/GameCard";
+import EventSearch from "@/components/search/EventSearch";
 import MultiDaySportFeed from "@/components/odds/MultiDaySportFeed";
 import { useSubscription } from "@/components/subscription/SubscriptionContext";
 import UpgradeBanner from "@/components/subscription/UpgradeBanner";
@@ -885,7 +886,7 @@ export default function Home() {
       )}
 
       <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-white">Today&apos;s Best Lines</h1>
             <p className="text-sm text-slate-400 mt-1">
@@ -897,6 +898,8 @@ export default function Home() {
                 : ""}
             </p>
           </div>
+
+          {showSportsView && <EventSearch allCategories={ALL_CATEGORIES} allGames={Object.values(gamesByCategory).flat()} allEvents={Object.values(eventsByCategory).flat()} />}
 
           <div className="flex items-center gap-2">
             <Button
