@@ -92,32 +92,32 @@ export const SEASONAL_CALENDAR = [
     id: 'golf_masters_tournament_winner',
     name: 'Masters',
     seasons: [
-      // Masters: April tournament
-      { startMonth: 3, startDay: 1, endMonth: 3, endDay: 30 }, // Apr 1-30 (tournament in early April)
+      // Masters futures open well before the tournament; show from mid-Feb through mid-Apr
+      { startMonth: 1, startDay: 15, endMonth: 3, endDay: 15 }, // Feb 15 to Apr 15
     ]
   },
   {
     id: 'golf_pga_championship_winner',
     name: 'PGA Championship',
     seasons: [
-      // PGA Championship: May tournament
-      { startMonth: 4, startDay: 1, endMonth: 4, endDay: 31 }, // May 1-31
+      // PGA Championship: futures from early Apr, tournament in May
+      { startMonth: 3, startDay: 1, endMonth: 4, endDay: 31 }, // Apr 1 to May 31
     ]
   },
   {
     id: 'golf_us_open_winner',
     name: 'US Open (Golf)',
     seasons: [
-      // US Open: June tournament
-      { startMonth: 5, startDay: 1, endMonth: 5, endDay: 30 }, // June 1-30
+      // US Open: futures from early May, tournament in June
+      { startMonth: 4, startDay: 1, endMonth: 5, endDay: 30 }, // May 1 to Jun 30
     ]
   },
   {
     id: 'golf_the_open_championship_winner',
     name: 'The Open',
     seasons: [
-      // The Open: July tournament
-      { startMonth: 6, startDay: 1, endMonth: 6, endDay: 31 }, // July 1-31
+      // The Open: futures from early Jun, tournament in July
+      { startMonth: 5, startDay: 1, endMonth: 6, endDay: 31 }, // Jun 1 to Jul 31
     ]
   },
   {
@@ -233,12 +233,22 @@ export function isSportInSeason(sportId, date = new Date()) {
     const year = checkDate.getFullYear();
     
     return calendarEntry.seasons.some(season => {
-      const startYear = year;
-      const endYear = year + (season.yearOffset || 0);
+      // Auto-detect cross-year seasons: if endMonth < startMonth (e.g. Oct→Apr),
+      // or yearOffset is explicitly set, the season crosses the year boundary.
+      const crossesYear = season.yearOffset === 1 || (season.endMonth < season.startMonth && !season.yearOffset && season.yearOffset !== 0);
+
+      if (crossesYear) {
+        // Check two windows: [start in previous year → end this year] OR [start this year → end next year]
+        const startA = new Date(year - 1, season.startMonth, season.startDay);
+        const endA   = new Date(year, season.endMonth, season.endDay);
+        const startB = new Date(year, season.startMonth, season.startDay);
+        const endB   = new Date(year + 1, season.endMonth, season.endDay);
+        return (checkDate >= startA && checkDate <= endA) || (checkDate >= startB && checkDate <= endB);
+      }
       
-      const startDate = new Date(startYear, season.startMonth, season.startDay);
-      const endDate = new Date(endYear, season.endMonth, season.endDay);
-      
+      // Same-year season
+      const startDate = new Date(year, season.startMonth, season.startDay);
+      const endDate = new Date(year, season.endMonth, season.endDay);
       return checkDate >= startDate && checkDate <= endDate;
     });
   } catch (error) {
