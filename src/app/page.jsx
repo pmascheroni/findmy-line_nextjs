@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { motion } from "framer-motion";
 import SportFilter from "@/components/odds/SportFilter";
+import LeagueFilter from "@/components/odds/LeagueFilter";
 import DatePicker from "@/components/odds/DatePicker";
 import GameCard from "@/components/odds/GameCard";
 import EventSearch from "@/components/search/EventSearch";
@@ -96,6 +97,7 @@ const PREDICTION_CATEGORY_LABELS = PREDICTION_CATEGORIES.reduce((acc, category) 
 export default function Home() {
   const [selectedSport, setSelectedSport] = useState("all");
   const [expandedGroups, setExpandedGroups] = useState({});
+  const [selectedLeagues, setSelectedLeagues] = useState([]);
   const [predictionCategory, setPredictionCategory] = useState("sports");
   const [predictionSearch, setPredictionSearch] = useState("");
   const [predictionMarkets, setPredictionMarkets] = useState([]);
@@ -383,6 +385,17 @@ export default function Home() {
       ...prev,
       [groupId]: !prev[groupId],
     }));
+  }, []);
+
+  const handleSelectLeague = useCallback((leagueId, jumpToDate = null) => {
+    // Toggle league selection
+    setSelectedLeagues((prev) =>
+      prev.includes(leagueId) ? prev.filter((id) => id !== leagueId) : [...prev, leagueId]
+    );
+    // If a date is provided (for upcoming leagues), jump to that date
+    if (jumpToDate) {
+      setSelectedDate(new Date(jumpToDate));
+    }
   }, []);
 
   const visiblePredictionMarkets = useMemo(() => {
@@ -994,22 +1007,35 @@ export default function Home() {
             </div>
             
             {/* Sport Filter & Date Picker Row */}
-            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-              <div className="flex-1" data-tour="sport-filter">
-                <SportFilter
-                sports={navSports}
-                selectedSport={selectedSport}
-                onSelectSport={(id) => { setSelectedSport(id); setNoGamesBanner(null); setMultiDayData(null); }}
-                sportsWithGamesToday={sportsWithGamesToday.map(s => s.id)}
-                onSportWithoutGamesClick={handleSportWithoutGamesClick}
-                expandedGroups={expandedGroups}
-                onToggleGroup={handleToggleGroup}
-              />
-            </div>
-            {/* Always show date picker so users can jump to any date */}
-            <div className="flex items-center gap-2" data-tour="date-picker">
-                <DatePicker selectedDate={safeSelectedDate} onDateChange={(d) => { setSelectedDate(d); setNoGamesBanner(null); setMultiDayData(null); }} />
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                <div className="flex-1" data-tour="sport-filter">
+                  <SportFilter
+                  sports={navSports}
+                  selectedSport={selectedSport}
+                  onSelectSport={(id) => { setSelectedSport(id); setNoGamesBanner(null); setMultiDayData(null); setSelectedLeagues([]); }}
+                  sportsWithGamesToday={sportsWithGamesToday.map(s => s.id)}
+                  onSportWithoutGamesClick={handleSportWithoutGamesClick}
+                  expandedGroups={expandedGroups}
+                  onToggleGroup={handleToggleGroup}
+                />
               </div>
+              {/* Always show date picker so users can jump to any date */}
+              <div className="flex items-center gap-2" data-tour="date-picker">
+                  <DatePicker selectedDate={safeSelectedDate} onDateChange={(d) => { setSelectedDate(d); setNoGamesBanner(null); setMultiDayData(null); }} />
+                </div>
+              </div>
+
+              {/* League Filter (Tier 2) - Shows only when a specific sport is selected */}
+              {selectedSport && selectedSport !== "all" && (
+                <LeagueFilter
+                  sportGroupId={selectedSport}
+                  selectedLeagues={selectedLeagues}
+                  onSelectLeague={handleSelectLeague}
+                  sportsWithGamesToday={sportsWithGamesToday.map(s => s.id)}
+                  upcomingLeaguesByDay={{}} // TODO: Populate from API
+                />
+              )}
             </div>
           </>
         
