@@ -886,7 +886,7 @@ export default function Home() {
       )}
 
       <div className="flex flex-col gap-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-white">Today&apos;s Best Lines</h1>
             <p className="text-sm text-slate-400 mt-1">
@@ -898,8 +898,6 @@ export default function Home() {
                 : ""}
             </p>
           </div>
-
-          {showSportsView && <EventSearch allCategories={ALL_CATEGORIES} allGames={Object.values(gamesByCategory).flat()} allEvents={Object.values(eventsByCategory).flat()} />}
 
           <div className="flex items-center gap-2">
             <Button
@@ -934,9 +932,16 @@ export default function Home() {
         )}
 
         {showSportsView ? (
-          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-            <div className="flex-1" data-tour="sport-filter">
-              <SportFilter
+          <>
+            {/* Search Bar Row */}
+            <div className="flex gap-3">
+              <EventSearch allCategories={ALL_CATEGORIES} allGames={Object.values(gamesByCategory).flat()} allEvents={Object.values(eventsByCategory).flat()} />
+            </div>
+            
+            {/* Sport Filter & Date Picker Row */}
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+              <div className="flex-1" data-tour="sport-filter">
+                <SportFilter
                 sports={navSports}
                 selectedSport={selectedSport}
                 onSelectSport={(id) => { setSelectedSport(id); setNoGamesBanner(null); setMultiDayData(null); }}
@@ -946,9 +951,11 @@ export default function Home() {
             </div>
             {/* Always show date picker so users can jump to any date */}
             <div className="flex items-center gap-2" data-tour="date-picker">
-              <DatePicker selectedDate={safeSelectedDate} onDateChange={(d) => { setSelectedDate(d); setNoGamesBanner(null); setMultiDayData(null); }} />
+                <DatePicker selectedDate={safeSelectedDate} onDateChange={(d) => { setSelectedDate(d); setNoGamesBanner(null); setMultiDayData(null); }} />
+              </div>
             </div>
-          </div>
+          </>
+        
         ) : (
           <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
             <div className="relative flex-1">

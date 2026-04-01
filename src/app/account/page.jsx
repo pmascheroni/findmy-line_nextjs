@@ -121,17 +121,27 @@ export default function Account() {
   };
 
   const handleManageBilling = async () => {
+    // Check if user has an active subscription first
+    if (subscriptionStatus !== "active") {
+      setMessage({ type: "error", text: "No active subscription to manage" });
+      return;
+    }
+
     setBillingLoading(true);
     try {
       const token = await auth.currentUser?.getIdToken();
       const stripeCustomerId = userDoc?.stripeCustomerId;
+
+      if (!stripeCustomerId) {
+        throw new Error("Stripe customer ID not found. Please contact support.");
+      }
 
       const res = await fetch("/api/stripe/billing-portal", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
-          "x-stripe-customer-id": stripeCustomerId || "",
+          "x-stripe-customer-id": stripeCustomerId,
         },
       });
       const data = await res.json();
@@ -263,15 +273,18 @@ export default function Account() {
         </div>
 
         <div className="space-y-4">
-          <Button
-            onClick={handlePasswordReset}
-            disabled={resetLoading}
-            variant="outline"
-            className="w-full border-slate-700 text-slate-300 hover:bg-slate-800"
-          >
-            {resetLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Lock className="w-4 h-4 mr-2" />}
-            Send Password Reset Email
-          </Button>
+          {/* Only show password reset for email/password auth, not for OAuth providers */}
+          {user?.providerData?.some((p) => p.providerId === "password") && (
+            <Button
+              onClick={handlePasswordReset}
+              disabled={resetLoading}
+              variant="outline"
+              className="w-full border-slate-700 text-slate-300 hover:bg-slate-800"
+            >
+              {resetLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Lock className="w-4 h-4 mr-2" />}
+              Send Password Reset Email
+            </Button>
+          )}
 
           <div className="p-4 bg-slate-800/30 rounded-lg border border-slate-700/50">
             <div className="flex items-start gap-3">
@@ -321,7 +334,7 @@ export default function Account() {
           </div>
         )}
 
-        {subscriptionStatus === "active" && (
+        {subscriptionStatus === "active" && userDoc?.stripeCustomerId && (
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mt-4">
             <Button
               variant="outline"

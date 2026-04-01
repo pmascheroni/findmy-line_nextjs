@@ -909,10 +909,6 @@ export default function GameDetail() {
 
       {/* True Odds Calculator */}
       <TrueOddsWidget game={game} />
-      
-
-      {/* True Odds Calculator */}
-      <TrueOddsWidget game={game} />
 
       {/* Bet Calculator */}
       <div data-tour="bet-calculator">
