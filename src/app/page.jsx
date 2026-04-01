@@ -18,7 +18,7 @@ import { useSettings } from "@/components/settings/SettingsContext";
 import OnboardingTour from "@/components/onboarding/OnboardingTour";
 import { useOnboarding } from "@/components/onboarding/useOnboarding";
 import SettingsModal from "@/components/settings/SettingsModal";
-import { TOP_SPORTS, EXTRA_SPORTS, ALL_CATEGORIES, TOP_IDS } from "@/lib/sportsCatalog";
+import { TOP_SPORTS, EXTRA_SPORTS, ALL_CATEGORIES, TOP_IDS, SPORT_GROUPS } from "@/lib/sportsCatalog";
 import { isSportInSeason, SEASONAL_CALENDAR } from "@/lib/seasonalCalendar";
 import PredictionMarketComparisonTable from "@/components/prediction/PredictionMarketComparisonTable";
 
@@ -95,6 +95,7 @@ const PREDICTION_CATEGORY_LABELS = PREDICTION_CATEGORIES.reduce((acc, category) 
 
 export default function Home() {
   const [selectedSport, setSelectedSport] = useState("all");
+  const [expandedGroups, setExpandedGroups] = useState({});
   const [predictionCategory, setPredictionCategory] = useState("sports");
   const [predictionSearch, setPredictionSearch] = useState("");
   const [predictionMarkets, setPredictionMarkets] = useState([]);
@@ -377,6 +378,13 @@ export default function Home() {
     }
   }, [safeSelectedDate]);
 
+  const handleToggleGroup = useCallback((groupId) => {
+    setExpandedGroups((prev) => ({
+      ...prev,
+      [groupId]: !prev[groupId],
+    }));
+  }, []);
+
   const visiblePredictionMarkets = useMemo(() => {
     if (predictionExpanded) return predictionMarkets;
     return predictionMarkets.slice(0, 5);
@@ -418,20 +426,29 @@ export default function Home() {
 
   const getOddsKeysForCategory = useCallback(async (category) => {
     if (!category) return [];
+    
+    // If category has direct oddsKeys, use them
     if (Array.isArray(category.oddsKeys)) return category.oddsKeys;
-    if (category.oddsGroup) {
-      if (oddsGroupCache.current[category.oddsGroup]) {
-        return oddsGroupCache.current[category.oddsGroup];
+    
+    // If category is a group (e.g., "basketball"), get all sports in that group
+    if (category.isGroup && category.group) {
+      const groupId = category.group;
+      if (oddsGroupCache.current[groupId]) {
+        return oddsGroupCache.current[groupId];
       }
-      const res = await fetch("/api/odds/sports", { cache: "no-store" });
-      const data = await res.json().catch(() => ({}));
-      const keys = (data.sports || [])
-        .filter((sport) => sport.active && sport.group === category.oddsGroup)
-        .map((sport) => sport.key);
-      const limitedKeys = keys.slice(0, 2);
-      oddsGroupCache.current[category.oddsGroup] = limitedKeys;
-      return limitedKeys;
+      
+      // Get the group definition from SPORT_GROUPS
+      const group = SPORT_GROUPS[groupId];
+      if (!group) return [];
+      
+      // Find all EXTRA_SPORTS that are in this group
+      const sportsInGroup = EXTRA_SPORTS.filter((sport) => group.sports.includes(sport.id));
+      const keys = sportsInGroup.flatMap((sport) => sport.oddsKeys || []);
+      
+      oddsGroupCache.current[groupId] = keys;
+      return keys;
     }
+    
     return [];
   }, []);
 
@@ -479,29 +496,67 @@ export default function Home() {
 
   const fetchTopOdds = useCallback(
     async (topCategories, force = false) => {
-      const ids = topCategories.map((sport) => sport.id);
-      const targets = force ? ids : ids.filter((id) => !loadedCategories.includes(id));
-      if (targets.length === 0) return;
+      // Build a map of category ID to oddsKeys, handling grouped sports
+      const categoryToOddsKeys = {};
+      const oddsKeysToFetch = [];
+      
+      for (const sport of topCategories) {
+        if (force || !loadedCategories.includes(sport.id)) {
+          let keys = [];
+          if (sport.isGroup && sport.group) {
+            // Get oddsKeys for all sports in this group
+            const group = SPORT_GROUPS[sport.group];
+            if (group) {
+              const sportsInGroup = EXTRA_SPORTS.filter((s) => group.sports.includes(s.id));
+              keys = sportsInGroup.flatMap((s) => s.oddsKeys || []);
+            }
+          } else if (Array.isArray(sport.oddsKeys)) {
+            // Direct oddsKeys
+            keys = sport.oddsKeys;
+          }
+          
+          if (keys.length > 0) {
+            categoryToOddsKeys[sport.id] = keys;
+            oddsKeysToFetch.push(...keys);
+          }
+        }
+      }
+      
+      if (oddsKeysToFetch.length === 0) return;
 
       setLoading(true);
       setApiError(null);
       try {
-        const games = await fetchOdds(targets);
-        const grouped = targets.reduce((acc, id) => ({ ...acc, [id]: [] }), {});
-        games.forEach((game) => {
-          if (!grouped[game.sport_key]) grouped[game.sport_key] = [];
-          grouped[game.sport_key].push(game);
+        const games = await fetchOdds(oddsKeysToFetch);
+        
+        // Organize games by category (sport.id, not sport_key)
+        const grouped = {};
+        Object.keys(categoryToOddsKeys).forEach((categoryId) => {
+          grouped[categoryId] = [];
         });
+        
+        games.forEach((game) => {
+          // Find which category this game belongs to
+          for (const [categoryId, keys] of Object.entries(categoryToOddsKeys)) {
+            if (keys.includes(game.sport_key)) {
+              grouped[categoryId].push(game);
+              break;
+            }
+          }
+        });
+        
         Object.keys(grouped).forEach((key) => {
           grouped[key] = grouped[key].sort(
             (a, b) => new Date(a.commence_time).getTime() - new Date(b.commence_time).getTime()
           );
         });
+        
         setGamesByCategory((prev) => ({ ...prev, ...grouped }));
-        setLoadedCategories((prev) => Array.from(new Set([...prev, ...targets])));
+        setLoadedCategories((prev) => Array.from(new Set([...prev, ...Object.keys(categoryToOddsKeys)])));
         setLastUpdated(new Date());
 
-        const fallbackCategories = targets.filter(
+        // Handle fallback for categories with no games
+        const fallbackCategories = Object.keys(categoryToOddsKeys).filter(
           (id) => (grouped[id]?.length || 0) === 0 && (summary[id] || 0) > 0
         );
         if (fallbackCategories.length > 0) {
@@ -947,6 +1002,8 @@ export default function Home() {
                 onSelectSport={(id) => { setSelectedSport(id); setNoGamesBanner(null); setMultiDayData(null); }}
                 sportsWithGamesToday={sportsWithGamesToday.map(s => s.id)}
                 onSportWithoutGamesClick={handleSportWithoutGamesClick}
+                expandedGroups={expandedGroups}
+                onToggleGroup={handleToggleGroup}
               />
             </div>
             {/* Always show date picker so users can jump to any date */}
