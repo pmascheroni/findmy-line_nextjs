@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { format, isToday, isSameDay } from "date-fns";
 import { Loader2, AlertCircle, RefreshCw, Trophy, ChevronDown, ChevronRight, HelpCircle, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -96,6 +96,8 @@ const PREDICTION_CATEGORY_LABELS = PREDICTION_CATEGORIES.reduce((acc, category) 
 }, {});
 
 export default function Home() {
+  const router = useRouter();
+
   const [selectedSport, setSelectedSport] = useState("all");
   const [expandedGroups, setExpandedGroups] = useState({});
   const [selectedLeagues, setSelectedLeagues] = useState([]);
@@ -107,6 +109,7 @@ export default function Home() {
   const [predictionExpanded, setPredictionExpanded] = useState(false);
   const [predictionLastUpdated, setPredictionLastUpdated] = useState(null);
   const [selectedDate, setSelectedDate] = useState(() => {
+    // Priority: localStorage > today (URL params loaded in useEffect)
     const saved =
       typeof window !== "undefined" &&
       window.localStorage &&
@@ -176,6 +179,46 @@ export default function Home() {
     setShowTour(shouldShowTour("home"));
     setTourInitialized(true);
   }, [mounted, tourInitialized, shouldShowTour]);
+
+  // Initialize state from URL params (client-side only)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const sport = params.get("sport");
+    const league = params.get("league");
+    const date = params.get("date");
+
+    if (sport && sport !== "all") {
+      setSelectedSport(sport);
+    }
+    if (league) {
+      setSelectedLeagues([league]);
+    }
+    if (date) {
+      const parsed = new Date(date);
+      if (!Number.isNaN(parsed.valueOf())) {
+        setSelectedDate(parsed);
+      }
+    }
+  }, []); // Run once on mount
+
+  // Sync selected sport and league to URL
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (selectedSport && selectedSport !== "all") {
+      params.set("sport", selectedSport);
+    }
+    if (selectedLeagues.length > 0) {
+      params.set("league", selectedLeagues[0]); // For now, support single league selection
+    }
+    const dateStr = safeSelectedDate.toISOString().split("T")[0];
+    if (dateStr !== new Date().toISOString().split("T")[0]) {
+      params.set("date", dateStr);
+    }
+    const queryString = params.toString();
+    const url = queryString ? `/?${queryString}` : "/";
+    window.history.replaceState(null, "", url);
+  }, [selectedSport, selectedLeagues, safeSelectedDate]);
 
   const toggleSportCollapse = (sportKey) => {
     setCollapsedSports((prev) => ({
