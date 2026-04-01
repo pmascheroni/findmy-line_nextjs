@@ -1,11 +1,59 @@
+// Sport grouping: allows related sports to be shown together (e.g., all basketball leagues under one "Basketball" filter)
+export const SPORT_GROUPS = {
+  basketball: {
+    id: "basketball",
+    name: "Basketball",
+    icon: "🏀",
+    sports: ["basketball_nba", "basketball_ncaab"],
+  },
+  hockey: {
+    id: "hockey",
+    name: "Hockey",
+    icon: "🏒",
+    sports: ["icehockey_nhl"],
+  },
+  fighting: {
+    id: "fighting",
+    name: "Fighting",
+    icon: "🥊",
+    sports: ["mma_mixed_martial_arts", "boxing_boxing"],
+  },
+  golf: {
+    id: "golf",
+    name: "Golf",
+    icon: "⛳",
+    sports: [
+      "golf_masters_tournament_winner",
+      "golf_pga_championship_winner",
+      "golf_us_open_winner",
+      "golf_the_open_championship_winner",
+    ],
+  },
+  soccer: {
+    id: "soccer",
+    name: "Soccer",
+    icon: "⚽",
+    sports: [
+      "soccer_epl",
+      "soccer_usa_mls",
+      "soccer_germany_bundesliga",
+      "soccer_spain_la_liga",
+      "soccer_italy_serie_a",
+      "soccer_france_ligue_one",
+      "soccer_uefa_champs_league",
+      "soccer_conmebol_copa_libertadores",
+      "soccer_fifa_world_cup",
+    ],
+  },
+};
+
 export const TOP_SPORTS = [
   { id: "americanfootball_nfl", name: "NFL", icon: "🏈", espnPaths: ["football/nfl"], oddsKeys: ["americanfootball_nfl"] },
   { id: "americanfootball_ncaaf", name: "NCAAF", icon: "🏈", espnPaths: ["football/college-football"], oddsKeys: ["americanfootball_ncaaf"] },
-  { id: "basketball_nba", name: "NBA", icon: "🏀", espnPaths: ["basketball/nba"], oddsKeys: ["basketball_nba"] },
-  { id: "basketball_ncaab", name: "NCAAB", icon: "🏀", espnPaths: ["basketball/mens-college-basketball"], oddsKeys: ["basketball_ncaab"] },
+  { id: "basketball", name: "Basketball", icon: "🏀", isGroup: true, group: "basketball" },
   { id: "baseball_mlb", name: "MLB", icon: "⚾", espnPaths: ["baseball/mlb"], oddsKeys: ["baseball_mlb"] },
-  { id: "icehockey_nhl", name: "NHL", icon: "🏒", espnPaths: ["hockey/nhl"], oddsKeys: ["icehockey_nhl"] },
-  { id: "mma_mixed_martial_arts", name: "UFC", icon: "🥊", espnPaths: ["mma/ufc"], oddsKeys: ["mma_mixed_martial_arts"] },
+  { id: "hockey", name: "Hockey", icon: "🏒", isGroup: true, group: "hockey" },
+  { id: "fighting", name: "Fighting", icon: "🥊", isGroup: true, group: "fighting" },
 ];
 
 export const EXTRA_SPORTS = [
