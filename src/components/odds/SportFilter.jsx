@@ -110,8 +110,10 @@ export default function SportFilter({ sports, selectedSport, onSelectSport, spor
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.3 }}
-              className="flex gap-2 overflow-x-auto scrollbar-none py-1 px-2 border-l-2 border-blue-500/50 ml-2"
+              className="w-full"
             >
+              <div className="flex gap-2 overflow-x-auto scrollbar-none py-1 px-2 border-l-2 border-blue-500/50 ml-2"
+              >
               {group.sports.map((sportId) => {
                 const sportDetail = sportDetailsMap[sportId];
                 if (!sportDetail) return null;
@@ -155,6 +157,7 @@ export default function SportFilter({ sports, selectedSport, onSelectSport, spor
                   </button>
                 );
               })}
+              </div>
             </motion.div>
           );
         })}
