@@ -95,6 +95,7 @@ const PREDICTION_CATEGORY_LABELS = PREDICTION_CATEGORIES.reduce((acc, category) 
 
 export default function Home() {
   const [selectedSport, setSelectedSport] = useState("all");
+  const [expandedGroups, setExpandedGroups] = useState({});
   const [predictionCategory, setPredictionCategory] = useState("sports");
   const [predictionSearch, setPredictionSearch] = useState("");
   const [predictionMarkets, setPredictionMarkets] = useState([]);
@@ -376,6 +377,13 @@ export default function Home() {
       setNoGamesBanner({ sportName: sport.name, nextDate: null, searching: false });
     }
   }, [safeSelectedDate]);
+
+  const handleToggleGroup = useCallback((groupId) => {
+    setExpandedGroups((prev) => ({
+      ...prev,
+      [groupId]: !prev[groupId],
+    }));
+  }, []);
 
   const visiblePredictionMarkets = useMemo(() => {
     if (predictionExpanded) return predictionMarkets;
@@ -947,6 +955,8 @@ export default function Home() {
                 onSelectSport={(id) => { setSelectedSport(id); setNoGamesBanner(null); setMultiDayData(null); }}
                 sportsWithGamesToday={sportsWithGamesToday.map(s => s.id)}
                 onSportWithoutGamesClick={handleSportWithoutGamesClick}
+                expandedGroups={expandedGroups}
+                onToggleGroup={handleToggleGroup}
               />
             </div>
             {/* Always show date picker so users can jump to any date */}
