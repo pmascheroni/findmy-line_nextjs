@@ -3,6 +3,16 @@ import { getAdminFirestore } from "@/lib/firebaseAdmin";
 
 export const dynamic = "force-dynamic";
 
+const ENRICHMENT_TOKEN = process.env.ENRICHMENT_INTERNAL_TOKEN || "internal-token-required";
+
+function validateInternalToken(request) {
+  const token = request.headers.get("x-internal-token");
+  if (!token || token !== ENRICHMENT_TOKEN) {
+    return false;
+  }
+  return true;
+}
+
 const SPORT_PATH_MAP = {
   americanfootball_nfl: "football/nfl",
   americanfootball_ncaaf: "football/college-football",
@@ -142,6 +152,11 @@ function countryToFlag(countryCode) {
 }
 
 export async function POST(request) {
+  // Validate internal token for security
+  if (!validateInternalToken(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  }
+
   try {
     const body = await request.json();
     const { teamName, sportKey } = body;

@@ -118,7 +118,10 @@ export function useTeamData() {
       try {
         const res = await fetch("/api/teams/enrich", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "x-internal-token": process.env.NEXT_PUBLIC_ENRICHMENT_INTERNAL_TOKEN || "internal-token-required",
+          },
           body: JSON.stringify({ teamName, sportKey }),
         });
         const data = await res.json();

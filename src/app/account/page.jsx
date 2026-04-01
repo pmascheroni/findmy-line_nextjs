@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, User, Crown, Star, Loader2, Check, X, Gift, CreditCard, FileText, ExternalLink, Calendar, Clock } from "lucide-react";
+import { ArrowLeft, User, Crown, Star, Loader2, Check, X, Gift, CreditCard, FileText, ExternalLink, Calendar, Clock, Lock, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useSubscription } from "@/components/subscription/SubscriptionContext";
@@ -77,6 +77,8 @@ export default function Account() {
 
   const [saving, setSaving] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [billingLoading, setBillingLoading] = useState(false);
   const [fullName, setFullName] = useState("");
   const [message, setMessage] = useState(null);
 
@@ -102,6 +104,42 @@ export default function Account() {
       setMessage({ type: "error", text: "Failed to update name" });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handlePasswordReset = async () => {
+    setResetLoading(true);
+    try {
+      await auth.sendPasswordResetEmail(user.email);
+      setMessage({ type: "success", text: "Password reset email sent! Check your inbox." });
+      setTimeout(() => setMessage(null), 4000);
+    } catch (err) {
+      setMessage({ type: "error", text: err.message || "Failed to send reset email" });
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  const handleManageBilling = async () => {
+    setBillingLoading(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const stripeCustomerId = userDoc?.stripeCustomerId;
+
+      const res = await fetch("/api/stripe/billing-portal", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          "x-stripe-customer-id": stripeCustomerId || "",
+        },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Failed to open billing portal");
+      window.location.href = data.url;
+    } catch (err) {
+      setMessage({ type: "error", text: err.message || "Failed to access billing portal" });
+      setBillingLoading(false);
     }
   };
 
@@ -215,6 +253,40 @@ export default function Account() {
 
       <div className="bg-slate-900/50 rounded-xl border border-slate-800/50 p-6">
         <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-500 to-pink-600 flex items-center justify-center">
+            <Lock className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-white">Security</h2>
+            <p className="text-sm text-slate-400">Manage your password and security settings</p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <Button
+            onClick={handlePasswordReset}
+            disabled={resetLoading}
+            variant="outline"
+            className="w-full border-slate-700 text-slate-300 hover:bg-slate-800"
+          >
+            {resetLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Lock className="w-4 h-4 mr-2" />}
+            Send Password Reset Email
+          </Button>
+
+          <div className="p-4 bg-slate-800/30 rounded-lg border border-slate-700/50">
+            <div className="flex items-start gap-3">
+              <Shield className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-white mb-1">Two-Factor Authentication</p>
+                <p className="text-xs text-slate-400">Coming soon — enhance your account security with 2FA</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-slate-900/50 rounded-xl border border-slate-800/50 p-6">
+        <div className="flex items-center gap-3 mb-6">
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-yellow-500 to-orange-600 flex items-center justify-center">
             <Crown className="w-5 h-5 text-white" />
           </div>
@@ -250,12 +322,21 @@ export default function Account() {
         )}
 
         {subscriptionStatus === "active" && (
-          <div className="flex items-center gap-3 mt-4">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mt-4">
+            <Button
+              variant="outline"
+              onClick={handleManageBilling}
+              disabled={billingLoading}
+              className="border-blue-700 text-blue-300 hover:bg-blue-800/20 flex-1 sm:flex-none"
+            >
+              {billingLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CreditCard className="w-4 h-4 mr-2" />}
+              Manage Billing
+            </Button>
             <Button
               variant="outline"
               onClick={handleCancelSubscription}
               disabled={cancelLoading}
-              className="border-slate-700 text-slate-300 hover:bg-slate-800"
+              className="border-slate-700 text-slate-300 hover:bg-slate-800 flex-1 sm:flex-none"
             >
               {cancelLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Cancel Subscription"}
             </Button>
